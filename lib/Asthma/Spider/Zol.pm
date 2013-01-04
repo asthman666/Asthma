@@ -4,7 +4,7 @@ use Moose;
 extends 'Asthma::Spider';
 
 use Asthma::LinkExtractor;
-use Data::Dumper;
+use Asthma::Item;
 
 has 'start_url' => (is => 'rw', isa => 'Str');
 has 'link_extractor' => (is => 'rw', lazy_build => 1);
@@ -28,8 +28,14 @@ sub run {
     foreach my $url ( @urls ) {
 	my $resp = $self->ua->get($url);
 	my $content = $resp->decoded_content;
-	$content =~ m{<h3>([^<]+)};
-	print $1, "\n";
+
+	my $item = Asthma::Item->new();
+
+	if ( $content =~ m{<h3>([^<]+)} ) {
+	    $item->name($1);
+	}
+	
+	$self->add_item($item);
     }
 }
 
