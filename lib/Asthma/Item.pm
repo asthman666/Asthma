@@ -3,7 +3,7 @@ use Moose;
 
 use Data::Dumper;
 
-has ['name', 'image_url', 'ean'] => (is => 'rw', isa => 'Str');
+has ['title', 'image_url', 'ean'] => (is => 'rw', isa => 'Str');
 has 'price' => (is => 'rw');
 
 before 'ean' => sub {

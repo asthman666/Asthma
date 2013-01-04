@@ -69,7 +69,7 @@ sub find {
 
 	my $item = Asthma::Item->new();
 
-	$item->name($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
+	$item->title($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
 
 	if ( $content =~ m{<li><b>条形码:</b>(.*?)</li>} ) {
 	    my $ean = $1;
@@ -89,7 +89,7 @@ sub find {
 	}
 
 	binmode(STDOUT, ":encoding(utf8)");
-	print "item name: '" . ($item->name || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'\n";
+	print "item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'\n";
 
 	if ( $item->ean ) {
 	    $self->add_item($item);
