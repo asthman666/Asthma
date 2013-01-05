@@ -8,6 +8,7 @@ use Asthma::LinkExtractor;
 use Asthma::Item;
 use HTML::TreeBuilder;
 use URI;
+use Asthma::Debug;
 
 has 'start_url' => (is => 'rw', isa => 'Str');
 has 'link_extractor' => (is => 'rw', lazy_build => 1);
@@ -19,6 +20,7 @@ sub _build_link_extractor {
 
 sub BUILD {
     my $self = shift;
+    $self->site_id(100);
     $self->start_url('http://www.amazon.cn/s?rh=n%3A658390051');
 }
 
@@ -57,6 +59,7 @@ sub find {
 
     my $page_url = $tree->look_down('id', 'pagnNextLink')->attr('href');
     $page_url = URI->new_abs($page_url, $resp->base)->as_string;
+    debug("get next page_url: $page_url");
     push @{$self->urls}, $page_url;
 
     foreach my $sku ( @skus ) {
@@ -70,7 +73,9 @@ sub find {
 
 	$item->sku($sku);
 
-	$item->title($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
+	if ( $sku_tree->look_down('id', 'btAsinTitle') ) {
+	    $item->title($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
+	}
 
 	if ( $content =~ m{<li><b>条形码:</b>(.*?)</li>} ) {
 	    my $ean = $1;
@@ -90,7 +95,7 @@ sub find {
 	}
 
 	binmode(STDOUT, ":encoding(utf8)");
-	print "item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'\n";
+	debug("item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || ''));
 
         $self->add_item($item);
     }
