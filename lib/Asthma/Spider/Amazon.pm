@@ -59,15 +59,16 @@ sub find {
     $page_url = URI->new_abs($page_url, $resp->base)->as_string;
     push @{$self->urls}, $page_url;
 
-    my @urls = map {"http://www.amazon.cn/dp/$_"} @skus;
-
-    foreach my $url ( @urls ) {
+    foreach my $sku ( @skus ) {
+        my $url = "http://www.amazon.cn/dp/$sku";
 	my $resp = $self->ua->get($url);
 
 	my $content = $resp->decoded_content;
 	my $sku_tree = HTML::TreeBuilder->new_from_content($content);
 
 	my $item = Asthma::Item->new();
+
+	$item->sku($sku);
 
 	$item->title($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
 
@@ -91,9 +92,7 @@ sub find {
 	binmode(STDOUT, ":encoding(utf8)");
 	print "item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'\n";
 
-	if ( $item->ean ) {
-	    $self->add_item($item);
-	}
+        $self->add_item($item);
     }
 }
 
@@ -101,3 +100,4 @@ sub find {
 __PACKAGE__->meta->make_immutable;
 
 1;
+
