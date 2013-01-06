@@ -10,6 +10,8 @@ use HTML::TreeBuilder;
 use URI;
 use Asthma::Debug;
 
+# NOTE: before version 5.00 of HTML::Element, you had to call delete when you were finished with the tree, or your program would leak memory.
+
 has 'start_url' => (is => 'rw', isa => 'Str');
 has 'link_extractor' => (is => 'rw', lazy_build => 1);
 
