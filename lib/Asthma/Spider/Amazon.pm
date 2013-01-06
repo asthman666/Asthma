@@ -59,10 +59,14 @@ sub find {
 	}
     }
 
-    my $page_url = $tree->look_down('id', 'pagnNextLink')->attr('href');
-    $page_url = URI->new_abs($page_url, $resp->base)->as_string;
-    debug("get next page_url: $page_url");
-    push @{$self->urls}, $page_url;
+    if ( $tree->look_down('id', 'pagnNextLink') ) {
+	my $page_url = $tree->look_down('id', 'pagnNextLink')->attr('href');
+	$page_url = URI->new_abs($page_url, $resp->base)->as_string;
+	debug("get next page_url: $page_url");
+	push @{$self->urls}, $page_url;
+    }
+
+    $tree->delete;
 
     foreach my $sku ( @skus ) {
         my $url = "http://www.amazon.cn/dp/$sku";
@@ -96,6 +100,8 @@ sub find {
 	    $item->image_url($image_url);
 	}
 
+	$sku_tree->delete;
+	
 	binmode(STDOUT, ":encoding(utf8)");
 	debug("item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || ''));
 
