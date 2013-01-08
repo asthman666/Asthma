@@ -39,6 +39,11 @@ sub wf {
 		$elt->set_att(name => $attr);
 		$elt->paste($doc);	
 	}
+
+	my $elt = XML::Twig::Elt->new(field => $self->site_id);
+	$elt->set_att(name => 'site_id');
+	$elt->paste($doc);
+
 	$doc->paste($add);
     }
 

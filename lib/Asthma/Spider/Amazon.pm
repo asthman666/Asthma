@@ -78,6 +78,7 @@ sub find {
 	my $item = Asthma::Item->new();
 
 	$item->sku($sku);
+	$item->url($url);
 
 	if ( $sku_tree->look_down('id', 'btAsinTitle') ) {
 	    $item->title($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
