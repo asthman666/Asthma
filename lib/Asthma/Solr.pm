@@ -9,7 +9,7 @@ has 'update_url' => (is => 'rw', isa => 'Str', lazy_build => 1);
 
 sub _build_update_url {
     my $self = shift;
-    return "http://" . $self->host . ":" . $self->port . "/update";
+    return "http://" . $self->host . ":" . $self->port . "/solr/update";
 }
 
 sub _build_curl {
