@@ -10,13 +10,12 @@ my $file_dir = "file";
 exit 0 unless -d $file_dir;
 
 opendir(my $dh, $file_dir);
-my @files = grep {$_ !~ /^\./ && -f "$file_dir/$_" } readdir($dh);
+my @files = grep {$_ !~ /^\./ && -f "$file_dir/$_" && $_ ne "README" } readdir($dh);
 closedir $dh;
 
 my $solr = Asthma::Solr->new();
 
 foreach my $file ( @files ) {
-    next if $file eq "README";
     $file = $file_dir . "/" . $file;
 }
 
