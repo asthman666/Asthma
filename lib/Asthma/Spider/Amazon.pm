@@ -103,9 +103,8 @@ sub find {
 
 	$sku_tree->delete;
 	
-	binmode(STDOUT, ":encoding(utf8)");
-	debug("item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || ''));
-
+	debug_item($item);
+	
         $self->add_item($item);
     }
 }

@@ -9,6 +9,15 @@ has 'id' => (is => 'rw', isa => 'Str');
 has 'dt_created' => (is => 'rw', isa => 'Str', lazy_build => 1);
 has 'dt_expire' => (is => 'rw', isa => 'Str', lazy_build => 1);
 
+before 'title' => sub {
+    if ( my $title = $_[1] ) {
+	$title =~ s{\s+$}{};
+	$title =~ s{^\s+}{};
+	$title =~ s{\s+}{ }g;
+	$_[1] = $title;
+    }
+};
+
 before 'ean' => sub {
     if ( my $ean = $_[1] ) {
 	$ean =~ s{[^\d]}{}g;

@@ -4,9 +4,8 @@ use POSIX qw(strftime);
 use Exporter;
 use vars qw/$VERSION @ISA @EXPORT $DEBUG_FH/;
 
-$VERSION = 1.00;
 @ISA = qw/Exporter/;
-@EXPORT = qw/&debug/;
+@EXPORT = qw/&debug &debug_item/;
 
 $DEBUG_FH ||= *STDERR;
 $|++;
@@ -19,10 +18,16 @@ sub debug {
     my @subinfo = caller(1);
 
     if ( $msg ) {
-        my $time = strftime("%D %T", localtime());
+        my $time = strftime("%F %T", localtime());
         my $out_str = "[$time]: $$ " . $subinfo[3] . ": $msg\n";
         print $DEBUG_FH $out_str;
     }
+}
+
+sub debug_item {
+    my $item = shift;
+    return unless $item;
+    debug("item url: " . ($item->url || '') . ", item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'");
 }
 
 1;

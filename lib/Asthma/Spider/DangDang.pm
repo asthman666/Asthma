@@ -111,10 +111,9 @@ sub find {
 	    my $ean = $1;
 	    $item->ean($ean);
 	}
-	
-	binmode(STDOUT, ":encoding(utf8)");
-	debug("item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'");
 
+	debug_item($item);
+	
         $self->add_item($item);
     }
 }
