@@ -22,7 +22,7 @@ sub wf {
     my $file;
     my $pn = ref($self);
     if ( $pn =~ m{Spider::(.+)} ) {
-	$file = "file/" . $1 . "_$chunk_num.xml";
+	$file = "/var/file/" . $1 . "_$chunk_num.xml";
     }
     return unless $file;
 
