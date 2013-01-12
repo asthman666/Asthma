@@ -6,7 +6,7 @@ use lib "$Bin/lib";
 use Asthma::Solr;
 use Asthma::Debug;
 
-my $file_dir = "file";
+my $file_dir = "/var/file";
 exit 0 unless -d $file_dir;
 
 opendir(my $dh, $file_dir);
@@ -23,6 +23,7 @@ foreach my $file ( @files ) {
 
 foreach my $file ( @files ) {
     debug("file $file will be posted to solr");
+    sleep 3;
     open my $fh, "<", $file;
     my $str = do {local $/; <$fh>};
     close $fh;

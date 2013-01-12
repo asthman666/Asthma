@@ -27,7 +27,7 @@ before 'ean' => sub {
 
 before 'price' => sub {
     if ( my $price = $_[1] ) {
-	$price =~ s{[^\d.,]}{}g;
+	$price =~ s{[^\d.]}{}g;
 	$_[1] = $price;
     }
 };
