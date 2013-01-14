@@ -1,6 +1,7 @@
 package Asthma::Solr;
 use Moose;
 use WWW::Curl::Easy;
+use Asthma::Debug;
 
 has 'curl' => (is => 'rw', isa => 'WWW::Curl::Easy', lazy_build => 1);
 has 'host' => (is => 'rw', isa => 'Str', default => 'localhost');
@@ -31,6 +32,8 @@ sub update {
     if ( $ret == 0 ) {
 	$self->curl->setopt(CURLOPT_POSTFIELDS, '<commit/>');
 	$self->curl->perform();
+    } else {
+	debug("An error happened: $ret".$self->curl->strerror($ret)." ".$self->curl->errbuf)
     }
     return $ret;
 }
