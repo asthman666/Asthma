@@ -19,10 +19,13 @@ sub wf {
 
     my $chunk_num = $self->chunk_num;
     
+    my @now = localtime();
+    my $date = sprintf("%04d%02d%02d-%02d%02d%02d", $now[5]+1900, $now[4]+1, $now[3], $now[2], $now[1], $now[0]);
+
     my $file;
     my $pn = ref($self);
     if ( $pn =~ m{Spider::(.+)} ) {
-	$file = "/var/file/" . $1 . "_$chunk_num.xml";
+	$file = "/var/file/" . $1 . "_${chunk_num}_$date.xml";
     }
     return unless $file;
 

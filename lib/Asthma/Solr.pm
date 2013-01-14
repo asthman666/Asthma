@@ -32,6 +32,7 @@ sub update {
 	$self->curl->setopt(CURLOPT_POSTFIELDS, '<commit/>');
 	$self->curl->perform();
     }
+    return $ret;
 }
 
 no Moose;

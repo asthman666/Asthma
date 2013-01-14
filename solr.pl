@@ -5,6 +5,8 @@ use FindBin qw/$Bin/;
 use lib "$Bin/lib";
 use Asthma::Solr;
 use Asthma::Debug;
+use File::Copy;
+use File::Basename;
 
 my $file_dir = "/var/file";
 exit 0 unless -d $file_dir;
@@ -27,5 +29,13 @@ foreach my $file ( @files ) {
     open my $fh, "<", $file;
     my $str = do {local $/; <$fh>};
     close $fh;
-    $solr->update($str);
+    my $ret = $solr->update($str);
+
+    my $base_name = basename($file);
+
+    if ( $ret ) {
+	move($file, "/var/file/bad/$base_name");
+    } else {
+	move($file, "/var/file/his/$base_name");
+    }
 }
