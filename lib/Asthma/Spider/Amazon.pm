@@ -51,12 +51,44 @@ sub find {
 
     my $content = $resp->decoded_content;
 
-    my @skus;
     my $tree = HTML::TreeBuilder->new_from_content($content);
-    if ( my @sku_divs = $tree->look_down('id', qr/result_\d+/) ) {
-	foreach my $div ( @sku_divs ) {
-	    push @skus, $div->attr('name');
-	}
+
+    my $is_leaf = 0;
+    my $is_after = 0;
+    
+    debug("process: " . $resp->request->uri->as_string);
+
+    # <ul id="ref_658391051" data-typeid="n" >
+    if ( my @uls = $tree->look_down('_tag'        => 'ul', 
+                                    'id'          => qr/ref_\d+/,
+                                    'data-typeid' => 'n') 
+        ) {
+        foreach my $ul ( @uls ) {
+            if ( my @lis = $ul->look_down(_tag => "li") ) {
+                for ( my $i = 0; $i <= $#lis; $i++ ) {
+                    my $li = $lis[$i];
+                    unless ( $li->look_down(_tag => "a") ) {
+                        if ( $i == $#lis ) {
+                            # the url is leaf browse_id url
+                            $is_leaf = 1;
+                        } else {
+                            $is_after = 1;
+                        }
+                    } else {
+                        if ( $is_after ) {
+                            my $link = $li->look_down(_tag => "a")->attr("href");
+                            $link = URI->new_abs($link, $resp->base)->as_string;
+                            push @{$self->urls}, $link;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    unless ($is_leaf) {
+        $tree->delete;
+        return;
     }
 
     if ( $tree->look_down('id', 'pagnNextLink') ) {
@@ -66,6 +98,13 @@ sub find {
 	push @{$self->urls}, $page_url;
     }
 
+    my @skus;
+    if ( my @sku_divs = $tree->look_down('id', qr/result_\d+/) ) {
+	foreach my $div ( @sku_divs ) {
+	    push @skus, $div->attr('name');
+	}
+    }
+    
     $tree->delete;
 
     foreach my $sku ( @skus ) {
@@ -113,4 +152,5 @@ sub find {
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
