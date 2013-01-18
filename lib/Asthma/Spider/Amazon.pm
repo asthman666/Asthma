@@ -9,6 +9,10 @@ use Asthma::Item;
 use HTML::TreeBuilder;
 use URI;
 use Asthma::Debug;
+use AnyEvent;
+use AnyEvent::HTTP;
+use HTTP::Headers;
+use HTTP::Message;
 
 # NOTE: before version 5.00 of HTML::Element, you had to call delete when you were finished with the tree, or your program would leak memory.
 
@@ -107,17 +111,48 @@ sub find {
     
     $tree->delete;
 
+    my $cv = AnyEvent->condvar;
+
     foreach my $sku ( @skus ) {
         my $url = "http://www.amazon.cn/dp/$sku";
-	my $resp = $self->ua->get($url);
+	$cv->begin;
 
-	my $content = $resp->decoded_content;
+	http_get $url, 
+	headers => {
+	    "user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
+	    "Accept-Encoding" => "gzip, deflate",
+	    'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
+	    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+	},
+
+	sub {
+	    my ( $body, $hdr ) = @_;
+	    
+	    my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
+	    my $mess = HTTP::Message->new( $header, $body );
+	    my $content = $mess->decoded_content;
+	    my $item = $self->parse($content);
+
+	    $item->sku($sku);
+	    $item->url($url);
+
+	    debug_item($item);
+	    
+	    $self->add_item($item);
+	    $cv->end;
+	}
+    }
+    $cv->recv;
+}
+
+sub parse {
+    my $self    = shift;
+    my $content = shift;
+
+    my $item = Asthma::Item->new();
+
+    if ( $content ) {
 	my $sku_tree = HTML::TreeBuilder->new_from_content($content);
-
-	my $item = Asthma::Item->new();
-
-	$item->sku($sku);
-	$item->url($url);
 
 	if ( $sku_tree->look_down('id', 'btAsinTitle') ) {
 	    $item->title($sku_tree->look_down('id', 'btAsinTitle')->as_trimmed_text);
@@ -141,11 +176,9 @@ sub find {
 	}
 
 	$sku_tree->delete;
-	
-	debug_item($item);
-	
-        $self->add_item($item);
     }
+
+    return $item;
 }
 
 
