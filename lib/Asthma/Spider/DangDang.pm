@@ -102,7 +102,9 @@ sub find {
 
         #id="largePic"
 	if ( $sku_tree->look_down('id', 'largePic') ) {
-	    $item->image_url($sku_tree->look_down('id', 'largePic')->attr('wsrc'));
+	    if ( $sku_tree->look_down('id', 'largePic')->attr('wsrc') ) {
+		$item->image_url($sku_tree->look_down('id', 'largePic')->attr('wsrc'));
+	    }
 	}
 
 	$sku_tree->delete;
