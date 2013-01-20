@@ -162,11 +162,27 @@ sub parse {
 	    my $ean = $1;
 	    $item->ean($ean);
 	}
+
+	# <span class="availRed">目前无货，</span><br />欢迎选购其他类似产品。<br />
+	if ( $sku_tree->look_down("class", "availRed") ) {
+	    my $stock = $sku_tree->look_down("class", "availRed")->as_trimmed_text;
+	    if ( $stock =~ m{目前无货} ) {
+		$item->available("out of stock");
+	    }
+	}
 	
 	# <span id="actualPriceValue"><b class="priceLarge">￥ 29.70</b></span>
 	if ( $sku_tree->look_down('id', 'actualPriceValue') ){
 	    my $price = $sku_tree->look_down('id', 'actualPriceValue')->look_down('class', 'priceLarge')->as_trimmed_text;
 	    $item->price($price);
+	} elsif ( $sku_tree->look_down('class', 'availGreen') && $sku_tree->look_down('class', 'availGreen')->as_trimmed_text =~ m{可以从这些卖家购买} ) {
+	    # <div id="olpDivId">
+	    if ( my $div = $sku_tree->look_down("id", "olpDivId") ) {
+		if ( $div->look_down("class", "price") ) {
+		    my $price = $div->look_down("class", "price")->as_trimmed_text;
+		    $item->price($price);
+		}
+	    }
 	}
 	
 	# id="original-main-image"

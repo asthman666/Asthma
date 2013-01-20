@@ -8,6 +8,7 @@ has 'price' => (is => 'rw');
 has 'id' => (is => 'rw', isa => 'Str');
 has 'dt_created' => (is => 'rw', isa => 'Str', lazy_build => 1);
 has 'dt_expire' => (is => 'rw', isa => 'Str', lazy_build => 1);
+has 'available' => (is => 'rw', isa => 'Str', default => 'in stock');
 
 before 'title' => sub {
     if ( my $title = $_[1] ) {
