@@ -12,7 +12,7 @@ sub add_item {
     my $self = shift;
     my $item = shift;
 
-    return unless $item->sku && $item->ean;
+    return unless $item->sku;
 
     push @{$self->{items}}, $item;
 
