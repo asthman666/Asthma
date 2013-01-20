@@ -135,7 +135,9 @@ sub parse {
 	if ( $content =~ m{currPrice\s*:\s*"(.*?)"} ) {
             my $price = $1;
             $item->price($price);
-        }
+        } else {
+	    $item->available('out of stock');
+	}
 	
         if ( $sku_tree->look_down(class => "bookFourthThum") ) {
             if ( my $img = $sku_tree->look_down(class => "bookFourthThum")->look_down(_tag => 'img') ) {
