@@ -2,13 +2,12 @@ package Asthma::Spider::Coo8Mobile;
 
 use Moose;
 extends 'Asthma::Spider';
+with 'Asthma::Tool';
 
 use utf8;
 use Asthma::Item;
 use Asthma::Debug;
 use HTML::TreeBuilder;
-use Image::OCR::Tesseract qw(get_ocr);
-use LWP::Simple qw(getstore);
 
 has 'start_url' => (is => 'rw', isa => 'Str');
 
@@ -47,9 +46,10 @@ sub find {
 
     if ( my $tree = HTML::TreeBuilder->new_from_content($content) ) {
         if ( $tree->look_down('class', 'page-next') ) {
-            my $page_url = $tree->look_down('class', 'page-next')->attr('href');
-            debug("get next page_url: $page_url");
-            push @{$self->urls}, $page_url;
+            if ( my $page_url = $tree->look_down('class', 'page-next')->attr('href') ) {
+		debug("get next page_url: $page_url");
+		push @{$self->urls}, $page_url;
+	    }
         }
 
         # parse list page
@@ -96,7 +96,7 @@ sub find {
             if ( my $p = $c->look_down(_tag => "p", class => "price") ) {
                 if ( my $img = $p->look_down(_tag => "img") ) {
                     if ( my $price_url = $img->attr("src") ) {
-                        if ( my $price = get_price($price_url) ) {
+                        if ( my $price = $self->get_price($price_url) ) {
                             $item->price($price);
                         }
                     }
@@ -109,25 +109,6 @@ sub find {
         $tree->delete;
     }
 }
-
-sub get_price {
-    my $price_url = shift;
-    return unless $price_url;
-
-    if ( $price_url =~ m{.+/(.+\.png)} ) {
-        my $file = "/tmp/img/$1";
-        my $code = getstore($price_url, $file);
-        my $text = get_ocr($file);
-        # 3’|99.00
-	my $sp = '’\|';
-	use Encode;
-	Encode::_utf8_off($sp);
-        $text =~ s{$sp}{1}g;
-        return $text;
-    }
-    return 0;
-}
-
 
 __PACKAGE__->meta->make_immutable;
 

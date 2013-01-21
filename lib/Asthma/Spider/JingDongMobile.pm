@@ -1,6 +1,7 @@
 package Asthma::Spider::JingDongMobile;
 use Moose;
 extends 'Asthma::Spider';
+with 'Asthma::Tool';
 
 use utf8;
 use Asthma::Item;
@@ -10,8 +11,6 @@ use AnyEvent;
 use AnyEvent::HTTP;
 use HTTP::Headers;
 use HTTP::Message;
-use Image::OCR::Tesseract qw(get_ocr);
-use LWP::Simple qw(getstore);
 use URI;
 #use Data::Dumper;
 
@@ -128,7 +127,7 @@ sub parse {
             if ( my $price_image = $sku_tree->look_down('id', 'product-intro')->look_down("class", "p-price") ) {
                 if ( $price_image->look_down(_tag => "img") ) {
                     my $price_url = $price_image->look_down(_tag => "img")->attr("src");
-                    if ( my $price = get_price($price_url) ) {
+                    if ( my $price = $self->get_price($price_url) ) {
                         $item->price($price);
                     }
                 }
@@ -147,23 +146,6 @@ sub parse {
     }
 
     return $item;
-}
-
-sub get_price {
-    my $price_url = shift;
-    return unless $price_url;
-
-    if ( $price_url =~ m{.+/(.+\.png)} ) {
-        my $file = "/tmp/img/$1";
-        debug("save to $file");
-        my $code = getstore($price_url, $file);
-        debug("download code $code");
-        my $text = get_ocr($file);
-        $text =~ s{’\|}{1}g;
-        debug("get price $text");
-        return $text;
-    }
-    return 0;
 }
 
 __PACKAGE__->meta->make_immutable;
