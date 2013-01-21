@@ -159,6 +159,7 @@ sub get_price {
         my $code = getstore($price_url, $file);
         debug("download code $code");
         my $text = get_ocr($file);
+        $text =~ s{’\|}{1}g;
         debug("get price $text");
         return $text;
     }
