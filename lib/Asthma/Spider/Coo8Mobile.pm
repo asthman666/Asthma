@@ -119,7 +119,10 @@ sub get_price {
         my $code = getstore($price_url, $file);
         my $text = get_ocr($file);
         # 3’|99.00
-        $text =~ s{’\|}{1}g;
+	my $sp = '’\|';
+	use Encode;
+	Encode::_utf8_off($sp);
+        $text =~ s{$sp}{1}g;
         return $text;
     }
     return 0;
