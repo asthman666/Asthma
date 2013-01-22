@@ -3,7 +3,6 @@ use Moose;
 extends 'Asthma::Spider';
 
 use utf8;
-use Asthma::LinkExtractor;
 use Asthma::Item;
 use HTML::TreeBuilder;
 use URI;
@@ -13,14 +12,6 @@ use AnyEvent::HTTP;
 use HTTP::Headers;
 use HTTP::Message;
 use Data::Dumper;
-
-has 'start_url' => (is => 'rw', isa => 'Str');
-has 'link_extractor' => (is => 'rw', lazy_build => 1);
-
-sub _build_link_extractor {
-    my $self = shift;
-    return Asthma::LinkExtractor->new();
-}
 
 sub BUILD {
     my $self = shift;

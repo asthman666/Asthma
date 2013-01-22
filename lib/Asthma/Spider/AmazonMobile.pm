@@ -19,8 +19,6 @@ use HTTP::Message;
     $AnyEvent::HTTP::MAX_PER_HOST = 10;
 }
 
-has 'start_url' => (is => 'rw', isa => 'Str');
-
 sub BUILD {
     my $self = shift;
     $self->site_id(100);

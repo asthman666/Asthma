@@ -9,8 +9,6 @@ use Asthma::Item;
 use Asthma::Debug;
 use HTML::TreeBuilder;
 
-has 'start_url' => (is => 'rw', isa => 'Str');
-
 sub BUILD {
     my $self = shift;
     $self->site_id(104);

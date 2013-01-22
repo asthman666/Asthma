@@ -7,6 +7,7 @@ with 'Asthma::File';
 has 'urls' => (is => 'rw', isa => 'ArrayRef[Str]', default => sub { [] });
 has 'chunk_num' => (is => 'rw', isa => 'Int', default => 0);
 has 'site_id' => (is => 'rw', isa => 'Int');
+has 'start_url' => (is => 'rw', isa => 'Str');
 
 sub add_item {
     my $self = shift;

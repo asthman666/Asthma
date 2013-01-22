@@ -4,7 +4,6 @@ use Moose;
 extends 'Asthma::Spider';
 
 use utf8;
-use Asthma::LinkExtractor;
 use Asthma::Item;
 use HTML::TreeBuilder;
 use URI;
@@ -15,14 +14,6 @@ use HTTP::Headers;
 use HTTP::Message;
 
 # NOTE: before version 5.00 of HTML::Element, you had to call delete when you were finished with the tree, or your program would leak memory.
-
-has 'start_url' => (is => 'rw', isa => 'Str');
-has 'link_extractor' => (is => 'rw', lazy_build => 1);
-
-sub _build_link_extractor {
-    my $self = shift;
-    return Asthma::LinkExtractor->new();
-}
 
 sub BUILD {
     my $self = shift;

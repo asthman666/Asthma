@@ -13,8 +13,6 @@ use HTTP::Headers;
 use HTTP::Message;
 use Data::Dumper;
 
-has 'start_url' => (is => 'rw', isa => 'Str');
-
 sub BUILD {
     my $self = shift;
     $self->site_id(103);

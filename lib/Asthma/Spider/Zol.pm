@@ -6,7 +6,6 @@ extends 'Asthma::Spider';
 use Asthma::LinkExtractor;
 use Asthma::Item;
 
-has 'start_url' => (is => 'rw', isa => 'Str');
 has 'link_extractor' => (is => 'rw', lazy_build => 1);
 
 sub _build_link_extractor {
