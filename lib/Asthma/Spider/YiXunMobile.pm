@@ -89,9 +89,11 @@ sub find {
                 $item->image_url($image_url);
             }
 
-            if ( $content =~ m{到货通知} ) {
+	    
+	    my $con = $c->as_trimmed_text;
+	    if ( $con =~ m{到货通知} ) {
                 $item->available('out of stock');
-            }
+	    }
 
             debug_item($item);
             $self->add_item($item);
