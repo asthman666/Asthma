@@ -44,28 +44,28 @@ sub find {
     
     debug("process: " . $resp->request->uri->as_string);
 
-    my $content = $resp->decoded_content;
-
-    my $tree = HTML::TreeBuilder->new_from_content($content);
-    
-    if ( $tree->look_down('class', 'next') ) {
-        my $page_url = $tree->look_down('class', 'next')->attr("href");
-        $page_url = URI->new_abs($page_url, $resp->base)->as_string;
-        debug("get next page_url: $page_url");
-        push @{$self->urls}, $page_url;
-    }
-    
     my @plinks;
-    foreach my $plist ( $tree->look_down("id", "proList") ) {
-	foreach my $item ( $plist->look_down(_tag => "li") ) {
-	    if ( my @item_links = $item->look_down(_tag => 'a') ) {
-		my $link = $item_links[0]->attr("href");
-		push @plinks, $link;
+    if ( my $content = $resp->decoded_content ) {
+	my $tree = HTML::TreeBuilder->new_from_content($content);
+	
+	if ( $tree->look_down('class', 'next') ) {
+	    my $page_url = $tree->look_down('class', 'next')->attr("href");
+	    $page_url = URI->new_abs($page_url, $resp->base)->as_string;
+	    debug("get next page_url: $page_url");
+	    push @{$self->urls}, $page_url;
+	}
+	
+	foreach my $plist ( $tree->look_down("id", "proList") ) {
+	    foreach my $item ( $plist->look_down(_tag => "li") ) {
+		if ( my @item_links = $item->look_down(_tag => 'a') ) {
+		    my $link = $item_links[0]->attr("href");
+		    push @plinks, $link;
+		}
 	    }
 	}
+	
+	$tree->delete;
     }
-    
-    $tree->delete;
 
     #debug("product links: " . Dumper \@plinks);
 
