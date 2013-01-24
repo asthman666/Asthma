@@ -115,7 +115,7 @@ sub parse {
             }
 	}
 
-	if ( $content =~ m{currPrice\s*=\s*(.*?)&} ) {
+	if ( $content =~ m{currPrice\s*=(.+?)&} ) {
             my $price = $1;
             $item->price($price);
         } else {
