@@ -38,6 +38,8 @@ sub find {
     my $resp = shift;
     return unless $resp;
 
+    debug("process: " . $resp->request->uri->as_string);
+
     if ( my $content = $resp->decoded_content ) {
         my $tree = HTML::TreeBuilder->new_from_content($content);
 
@@ -56,7 +58,6 @@ sub find {
             @chunks = $plist->look_down(_tag => 'li', name => 'lb');
         }
 
-
         foreach my $c ( @chunks ) {
             my $item = Asthma::Item->new();
             if ( my $p = $c->look_down(_tag => 'p', class => "name") ) {
@@ -68,11 +69,14 @@ sub find {
             if ( my $p = $c->look_down(class => "price") ) {
                 if ( my $pr = $p->look_down(class => "price_n") ) {
                     if ( my $price = $pr->as_trimmed_text ) {
-                        $item->price($price);
+			if ( $price =~ m{\-} ) {
+			    $item->price((split(/\-/, $price))[0]);
+			} else {
+			    $item->price($price);
+			}
                     }
                 }
             }
-
 
             if ( my $p = $c->look_down(class => "inner") ) {
                 if ( my $a = $p->look_down(_tag => "a") ) {
