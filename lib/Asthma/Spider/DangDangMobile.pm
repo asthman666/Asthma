@@ -85,6 +85,9 @@ sub find {
                             my $sku = $1;
                             $item->sku($sku);
                             $item->url($url);
+                            if ( my $ava = $self->get_stock($sku) ) {
+                                $item->available($ava);
+                            }
                         }
                     }
                 }
@@ -98,10 +101,28 @@ sub find {
     }
 }
 
+sub get_stock {
+    my $self = shift;
+    my $sku  = shift;
+    return unless $sku;
+    my $url = "http://product.dangdang.com/callback.php?product_id=$sku&type=stock";
+    my $resp = $self->ua->get($url);
+    my $content = $resp->decoded_content;
+    use JSON;
+    my $ref = decode_json($content);
+
+    #use Data::Dumper;debug Dumper $ref;
+
+    if ( $ref->{havestock} && $ref->{havestock} eq 'presale' ) {
+        return 'pre order';
+    }
+    return;
+}
 
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
 
 
