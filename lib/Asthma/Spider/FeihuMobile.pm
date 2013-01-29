@@ -11,7 +11,7 @@ use Asthma::Debug;
 
 sub BUILD {
     my $self = shift;
-    $self->site_id(110);
+    $self->site_id(111);
     $self->start_url('http://www.efeihu.com/Products/89-0-0-0-0-0-40--1.html');
 }
 
