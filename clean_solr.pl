@@ -7,7 +7,6 @@ use Asthma::Solr;
 use Asthma::Debug;
 
 my $solr = Asthma::Solr->new();
-my $day = shift || 2;
-my $str = "<delete><query>dt_created:[* TO NOW-${day}DAY]</query></delete>";
+my $str = "<delete><query>dt_created:[* TO NOW/DAY]</query></delete>";
 debug $str;
 $solr->update($str);
