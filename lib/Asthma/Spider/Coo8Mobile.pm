@@ -100,6 +100,11 @@ sub find {
                     }
                 }
             }
+
+            if ( my $ava = $self->get_stock($item->sku) ) {
+                $item->available($ava);
+            }
+
             debug_item($item);
             $self->add_item($item);
         }
@@ -108,9 +113,28 @@ sub find {
     }
 }
 
+sub get_stock {
+    my $self = shift;
+    my $sku  = shift;
+    return unless $sku;
+    my $url = "http://www.coo8.com/interfaces/quantity/quantity.action?itemId=$sku&province=11000000&city=11050000&county=11050100&a=" . rand;
+
+    my $resp = $self->ua->get($url);
+    my $content = $resp->decoded_content;
+
+    if ( $content =~ m{'storeStatus':'(\d+)'} ) {
+        if ( $1 == 2 ) {
+            return 'out of stock';
+        }
+    }
+
+    return;
+}
+
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
 
 
