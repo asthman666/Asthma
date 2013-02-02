@@ -213,7 +213,6 @@ sub get_stock {
             $vendor = $1;
         }
 
-        
         # http://www.suning.com/emall/SNProductSaleView?storeId=10052&catalogId=10051&productId=2052998&salesOrg=5016&deptNo=0001&vendor=0010037230&partNumber=000000000102535623&cityId=9173&districtId=&_=1359689905024
         if ( $sales_org && $dept_no && $vendor && $part_num ) {
             my $url2 = "http://www.suning.com/emall/SNProductSaleView?storeId=$store_id&catalogId=$catalog_id&productId=$product_id&salesOrg=$sales_org&deptNo=$dept_no&vendor=$vendor&partNumber=$part_num&cityId=9173&districtId=&_=" . rand;
@@ -239,6 +238,11 @@ sub get_stock {
                 $item->available('out of stock');
             }
         }
+	
+	# NOTE: no price, no stock for suning
+	unless ( $item->price ) {
+	    $item->available('out of stock');
+	}
     }
 }
 
