@@ -27,7 +27,7 @@ sub debug {
 sub debug_item {
     my $item = shift;
     return unless $item;
-    debug("item sku: " . ($item->sku || '') . ", item url: " . ($item->url || '') . ", item name: '" . ($item->title || '') . "', ean: '" . ($item->ean || '') . "', price: '" . ($item->price || '') . "', image_url: '" . ($item->image_url || '') . "'" . ", available: " . $item->available);
+    debug("item sku: " . ($item->sku || '') . ", item url: " . ($item->url || '') . ", item name: '" . ($item->title || '') . "', price: '" . ($item->price || '') . "'" . ", available: " . $item->available);
 }
 
 1;
