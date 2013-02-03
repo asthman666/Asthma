@@ -7,7 +7,10 @@ use Asthma::Item;
 use Asthma::Debug;
 use HTML::TreeBuilder;
 use URI;
-#use Data::Dumper;
+use AnyEvent;
+use AnyEvent::HTTP;
+use HTTP::Headers;
+use HTTP::Message;
 
 sub BUILD {
     my $self = shift;
@@ -54,51 +57,86 @@ sub find {
             }
         }
 
-        # parse list page
-        my @chunks;
+	my @skus;
         if ( my $plist = $tree->look_down('id', 'plist') ) {
-            @chunks = $plist->look_down(_tag => 'li', sku => qr/\d+/)
-        }
-
-        foreach my $c ( @chunks ) {
-            my $item = Asthma::Item->new();
-            if ( my $p = $c->look_down(class => "p-name") ) {
-                if ( my $title = $p->as_trimmed_text ) {
-                    $item->title($title);
-                }
-            }
-
-            if ( my $sku = $c->attr("sku") ) {
-                $item->sku($sku);
-                $item->url("http://www.360buy.com/product/" . $sku . ".html");
-                if ( my $price = $self->fprice($sku) ) {
-                    $item->price($price);
-                }
-            }
-
-            if ( my $p = $c->look_down(class => "p-img") ) {
-                if ( my $img = $p->look_down(_tag => "img") ) {
-                    if ( my $image_url = $img->attr("src") || $img->attr("src2") ) {
-                        $item->image_url($image_url);
-                    }
-                }
-            }
-
-            my $con = $c->as_trimmed_text;
-	    if ( $con =~ m{到货通知} ) {
-                $item->available('out of stock');
+            if ( my @lis = $plist->look_down(_tag => 'li', sku => qr/\d+/) ) {
+		foreach ( @lis ) {
+		    my $sku = $_->attr("sku");
+		    push @skus, $sku;
+		}
 	    }
-
-            debug_item($item);
-            $self->add_item($item);
         }
+
+	#use Data::Dumper;debug("get sku num: " . scalar(@skus) . ", " . Dumper \@skus);
 
         $tree->delete;
+
+	if ( @skus ) {
+	    my $cv = AnyEvent->condvar;
+
+	    foreach my $sku ( @skus ) {
+		my $url = "http://www.360buy.com/product/$sku.html";
+
+		$cv->begin;
+		http_get $url, 
+		headers => {
+		    "user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
+		    "Accept-Encoding" => "gzip, deflate",
+		    'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
+		    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		},
+
+		sub {
+		    my ( $body, $hdr ) = @_;
+		    
+		    my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
+		    my $mess = HTTP::Message->new( $header, $body );
+		    my $content = $mess->decoded_content(charset => 'gb2312');
+		    my $item = $self->parse($content, $sku);
+		    $item->url($url);
+
+		    debug_item($item);
+		    
+		    $self->add_item($item);
+		    $cv->end;
+		}
+	    }
+
+	    $cv->recv;
+	}
     }
 }
 
 sub parse {
+    my $self    = shift;
+    my $content = shift;
+    my $sku     = shift;
+
+    my $item = Asthma::Item->new();
+    $item->sku($sku);
     
+    if ( $content ) {
+	my $sku_tree = HTML::TreeBuilder->new_from_content($content);
+
+	if ( $sku_tree->look_down(_tag => 'h1') ) {
+	    $item->title($sku_tree->look_down(_tag => 'h1')->as_trimmed_text);
+	}
+
+	if ( my $price = $self->fprice($sku) ) {
+	    $item->price($price);
+	}
+
+	if ( $content =~ m{skuidkey\s*:\s*'(.+?)'} ) {
+	    my $skuidkey = $1;
+	    if ( my $ava = $self->get_stock($1) ) {
+		$item->available($ava);
+	    }
+	}
+
+	$sku_tree->delete;
+    }
+
+    return $item;
 }
 
 sub fprice {
@@ -114,6 +152,24 @@ sub fprice {
         return $1;
     }
 
+    return;
+}
+
+sub get_stock {
+    my $self     = shift;
+    my $skuidkey = shift;
+    return unless $skuidkey;
+    my $url = "http://price.360buy.com/stocksoa/StockHandler.ashx?callback=getProvinceStockCallback&type=ststock&skuid=$skuidkey&provinceid=1&cityid=72&areaid=4137";
+    my $resp = $self->ua->get($url);
+    my $content = $resp->decoded_content;
+
+    if ( $content =~ m{"S":"\d+-(\d+)} ) {
+	my $s = $1;
+	if ( grep { $s == $_ } (18,34,0) ) {
+	    return 'out of stock';
+	}
+    }
+    
     return;
 }
 
