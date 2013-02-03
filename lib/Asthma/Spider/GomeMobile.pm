@@ -12,21 +12,9 @@ use HTTP::Headers;
 use HTTP::Message;
 use Data::Dumper;
 
-has 'json_ua' => (is => 'rw', isa => 'LWP::UserAgent', lazy_build => 1);
-
-sub _build_json_ua {
-    my $ua = LWP::UserAgent->new();
-    $ua->agent('Mozilla/5.0 (Windows NT 5.1; rv:18.0) Gecko/20100101 Firefox/18.0');
-    $ua->default_header('Accept' => 'application/json, text/javascript, */*');	
-    $ua->default_header('Accept-Language' => 'zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3');	
-    $ua->default_header('Accept-Encoding' => 'gzip, deflate');
-    $ua->default_header('X-Requested-With' => 'XMLHttpRequest');
-    return $ua;
-}
-
 sub BUILD {
     my $self = shift;
-    $self->site_id(103);
+    $self->site_id(114);
     $self->start_url('http://www.gome.com.cn/ec/homeus/jump/category/cat10000070-1-1-1-1-1-1.html');
 }
 
