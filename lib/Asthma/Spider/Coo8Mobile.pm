@@ -122,7 +122,7 @@ sub get_stock {
     my $resp = $self->ua->get($url);
     my $content = $resp->decoded_content;
 
-    if ( $content =~ m{'storeStatus':'(\d+)'} ) {
+    if ( $content =~ m{(?:"|')storeStatus(?:"|'):(?:"|')(\d+)(?:"|')} ) {
         if ( $1 == 2 ) {
             return 'out of stock';
         }
