@@ -22,7 +22,7 @@ use HTTP::Message;
 sub BUILD {
     my $self = shift;
     $self->site_id(100);
-    $self->start_urls(['http://www.amazon.cn/b?node=665002051', 'http://www.amazon.cn/b/?node=888483051']);
+    $self->start_urls(['http://www.amazon.cn/b?node=665002051', 'http://www.amazon.cn/b/?node=888483051', 'http://www.amazon.cn/b/?node=888578051', 'http://www.amazon.cn/b/?node=148770071']);
 }
 
 sub run {
