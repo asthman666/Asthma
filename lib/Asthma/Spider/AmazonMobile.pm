@@ -22,15 +22,16 @@ use HTTP::Message;
 sub BUILD {
     my $self = shift;
     $self->site_id(100);
-    $self->start_url('http://www.amazon.cn/b?node=665002051');
+    $self->start_urls(['http://www.amazon.cn/b?node=665002051', 'http://www.amazon.cn/b/?node=888483051']);
 }
 
 sub run {
     my $self = shift;
 
-    my $resp = $self->ua->get($self->start_url);
-    
-    $self->find($resp);
+    foreach my $start_url ( @{$self->start_urls} ) {
+       my $resp = $self->ua->get($start_url);
+       $self->find($resp);
+    }
 
     my $run = 1;
     while ( $run ) {
