@@ -22,7 +22,26 @@ use HTTP::Message;
 sub BUILD {
     my $self = shift;
     $self->site_id(100);
-    $self->start_urls(['http://www.amazon.cn/b?node=665002051', 'http://www.amazon.cn/b/?node=888483051', 'http://www.amazon.cn/b/?node=888578051', 'http://www.amazon.cn/b/?node=148770071']);
+    $self->start_urls(['http://www.amazon.cn/b?node=665002051', 
+		       'http://www.amazon.cn/b/?node=888483051', 
+		       'http://www.amazon.cn/b/?node=888578051', 
+		       'http://www.amazon.cn/b/?node=148770071',
+		       'http://www.amazon.cn/s/?node=814227051',
+		       'http://www.amazon.cn/s/?node=814229051',
+		       'http://www.amazon.cn/s/?node=814228051',
+		       'http://www.amazon.cn/s/?node=80207071',
+		       'http://www.amazon.cn/s/?node=874259051',
+		       'http://www.amazon.cn/s/?node=755654051',
+		       'http://www.amazon.cn/s/?node=755657051',
+		       'http://www.amazon.cn/s/?node=152323071',
+		       'http://www.amazon.cn/s/?node=760236051',
+		       'http://www.amazon.cn/s/?node=760237051',    
+		       'http://www.amazon.cn/s/?node=760240051',     #耳机
+		       'http://www.amazon.cn/s/?node=760239051',     #音箱
+		       'http://www.amazon.cn/s/?node=760241051',     #麦克风
+		       'http://www.amazon.cn/s/?node=114251071',     #打印机
+		       'http://www.amazon.cn/s/?node=813272051',     #饮水用具
+		      ]);
 }
 
 sub run {
