@@ -93,6 +93,7 @@ sub find {
     my $cv = AnyEvent->condvar;
 
     foreach my $sku ( @skus ) {
+	next unless $sku;
         my $url = "http://www.amazon.cn/dp/$sku";
 	$cv->begin;
 
