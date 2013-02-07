@@ -10,3 +10,8 @@ my $solr = Asthma::Solr->new();
 my $str = "<delete><query>dt_created:[* TO NOW/DAY]</query></delete>";
 debug $str;
 $solr->update($str);
+
+$str = "<optimize/>";
+debug $str;
+$solr->update($str);
+
