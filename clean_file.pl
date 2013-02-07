@@ -18,7 +18,7 @@ my @files_expired;
 foreach my $file ( @files ) {
     my $mtime = (stat($file))[9];
     #debug("file $file, mtime: $mtime");
-    push(@files_expired, $file) if $mtime + 3600*24*3 < time;
+    push(@files_expired, $file) if $mtime + 3600*24*1 < time;
 }
 
 if ( @files_expired ) {
