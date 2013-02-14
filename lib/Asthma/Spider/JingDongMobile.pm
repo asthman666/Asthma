@@ -15,15 +15,21 @@ use HTTP::Message;
 sub BUILD {
     my $self = shift;
     $self->site_id(102);
-    $self->start_url('http://www.360buy.com/products/652-653-655.html');
+    $self->start_urls(['http://www.360buy.com/products/652-653-655.html',    # 手机
+		       'http://www.360buy.com/products/670-671-672.html',    # 笔记本
+		       'http://www.360buy.com/products/670-671-6864.html',   # 超级本
+		       'http://www.360buy.com/products/670-671-1105.html',   # 上网本
+		       'http://www.360buy.com/products/670-671-2694.html',   # 平板电脑
+		      ]);
 }
 
 sub run {
     my $self = shift;
 
-    my $resp = $self->ua->get($self->start_url);
-    
-    $self->find($resp);
+    foreach my $start_url ( @{$self->start_urls} ) {
+       my $resp = $self->ua->get($start_url);
+       $self->find($resp);
+    }
 
     my $run = 1;
     while ( $run ) {
