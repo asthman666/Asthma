@@ -56,7 +56,7 @@ sub run {
 	}
     }
 
-    my $sem = Coro::Semaphore->new(5);
+    my $sem = Coro::Semaphore->new(100);
 
     my @coros;
 
