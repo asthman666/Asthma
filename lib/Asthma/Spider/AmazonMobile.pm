@@ -8,49 +8,43 @@ use Asthma::Item;
 use HTML::TreeBuilder;
 use URI;
 use Asthma::Debug;
-use AnyEvent;
+use Coro;
+use Coro::Semaphore;
 use AnyEvent::HTTP;
 use HTTP::Headers;
 use HTTP::Message;
 
 # NOTE: before version 5.00 of HTML::Element, you had to call delete when you were finished with the tree, or your program would leak memory.
 
-{
-    $AnyEvent::HTTP::MAX_PER_HOST = 10;
-}
-
 sub BUILD {
     my $self = shift;
     $self->site_id(100);
-    $self->start_urls(['http://www.amazon.cn/b?node=665002051', 
-		       'http://www.amazon.cn/b/?node=888483051', 
-		       'http://www.amazon.cn/b/?node=888578051', 
-		       'http://www.amazon.cn/b/?node=148770071',
-		       'http://www.amazon.cn/s/?node=814227051',
-		       'http://www.amazon.cn/s/?node=814229051',
-		       'http://www.amazon.cn/s/?node=814228051',
-		       'http://www.amazon.cn/s/?node=80207071',
-		       'http://www.amazon.cn/s/?node=874259051',
-		       'http://www.amazon.cn/s/?node=755654051',
-		       'http://www.amazon.cn/s/?node=755657051',
-		       'http://www.amazon.cn/s/?node=152323071',
-		       'http://www.amazon.cn/s/?node=760236051',
-		       'http://www.amazon.cn/s/?node=760237051',    
-		       'http://www.amazon.cn/s/?node=760240051',     #耳机
-		       'http://www.amazon.cn/s/?node=760239051',     #音箱
-		       'http://www.amazon.cn/s/?node=760241051',     #麦克风
-		       'http://www.amazon.cn/s/?node=114251071',     #打印机
-		       'http://www.amazon.cn/s/?node=813272051',     #饮水用具
+    $self->start_urls(['http://www.amazon.cn/b?node=665002051',      #手机
+		       #'http://www.amazon.cn/b/?node=888483051',     #笔记本电脑
+		       #'http://www.amazon.cn/b/?node=888578051',     #上网本
+		       #'http://www.amazon.cn/b/?node=148770071',     #超极本
+		       #'http://www.amazon.cn/s/?node=814227051',     #厨房电器
+		       #'http://www.amazon.cn/s/?node=814229051',     #居家电器
+		       #'http://www.amazon.cn/s/?node=814228051',     #个人护理电器
+		       #'http://www.amazon.cn/s/?node=80207071',
+		       #'http://www.amazon.cn/s/?node=874259051',
+		       #'http://www.amazon.cn/s/?node=755654051',
+		       #'http://www.amazon.cn/s/?node=755657051',
+		       #'http://www.amazon.cn/s/?node=152323071',
+		       #'http://www.amazon.cn/s/?node=760236051',
+		       #'http://www.amazon.cn/s/?node=760237051',    
+		       #'http://www.amazon.cn/s/?node=760240051',     #耳机
+		       #'http://www.amazon.cn/s/?node=760239051',     #音箱
+		       #'http://www.amazon.cn/s/?node=760241051',     #麦克风
+		       #'http://www.amazon.cn/s/?node=114251071',     #打印机
+		       #'http://www.amazon.cn/s/?node=813272051',     #饮水用具
 		      ]);
 }
 
 sub run {
     my $self = shift;
 
-    foreach my $start_url ( @{$self->start_urls} ) {
-       my $resp = $self->ua->get($start_url);
-       $self->find($resp);
-    }
+    push @{$self->urls}, @{$self->start_urls};
 
     my $run = 1;
     while ( $run ) {
@@ -61,6 +55,49 @@ sub run {
 	    $run = 0;
 	}
     }
+
+    my $sem = Coro::Semaphore->new(5);
+
+    my @coros;
+
+    $run = 1;
+    while ( $run ) {
+	if ( my $url = $self->storage->redis->lpop($self->site_id) ) {
+	    next if $url !~ m{dp/(.+)};
+	    my $sku = $1;
+	    
+	    push @coros,
+	    async {
+		my $guard = $sem->guard;
+
+		http_get $url, 
+		headers => {
+		    "user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
+		    "Accept-Encoding" => "gzip, deflate",
+		    'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
+		    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		},
+		Coro::rouse_cb;
+
+		my ($body, $hdr) = Coro::rouse_wait;
+		debug("$hdr->{Status} $hdr->{Reason} $hdr->{URL}");
+		
+		my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
+		my $mess = HTTP::Message->new( $header, $body );
+		my $content = $mess->decoded_content;
+		my $item = $self->parse($content);
+		
+		$item->sku($sku);
+		$item->url($url);
+		debug_item($item);
+		$self->add_item($item);
+	    }
+	} else {
+	    $run = 0;
+	}
+    }
+
+    $_->join foreach ( @coros );
 }
 
 sub find {
@@ -88,39 +125,11 @@ sub find {
 	
 	$tree->delete;
 
-	my $cv = AnyEvent->condvar;
-
 	foreach my $sku ( @skus ) {
 	    next unless $sku;
 	    my $url = "http://www.amazon.cn/dp/$sku";
-	    $cv->begin;
-
-	    http_get $url, 
-	    headers => {
-		"user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
-		"Accept-Encoding" => "gzip, deflate",
-		'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
-		'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-	    },
-
-	    sub {
-		my ( $body, $hdr ) = @_;
-		
-		my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
-		my $mess = HTTP::Message->new( $header, $body );
-		my $content = $mess->decoded_content;
-		my $item = $self->parse($content);
-
-		$item->sku($sku);
-		$item->url($url);
-
-		debug_item($item);
-		
-		$self->add_item($item);
-		$cv->end;
-	    }
+	    $self->storage->redis->rpush($self->site_id, $url);
 	}
-	$cv->recv;
     }
 }
 
