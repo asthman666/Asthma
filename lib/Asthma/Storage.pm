@@ -7,7 +7,7 @@ has 'redis' => (is => 'rw', isa => 'Redis', lazy_build => 1);
 
 sub _build_redis {
     my $self = shift;
-    my $redis = Redis->new;
+    my $redis = Redis->new(reconnect => 60);
     return $redis;
 }
 
