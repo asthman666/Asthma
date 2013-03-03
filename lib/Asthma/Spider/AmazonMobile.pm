@@ -143,7 +143,7 @@ sub ido {
 		Coro::rouse_cb;
 
 		my ($body, $hdr) = Coro::rouse_wait;
-		#debug("$hdr->{Status} $hdr->{Reason} $hdr->{URL}");
+		debug("$hdr->{Status} $hdr->{Reason} $hdr->{URL}");
 		
 		my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
 		my $mess = HTTP::Message->new( $header, $body );
@@ -184,7 +184,7 @@ sub parse {
 	# <span class="availRed">目前无货，</span><br />欢迎选购其他类似产品。<br />
 	if ( $sku_tree->look_down("class", "availRed") ) {
 	    my $stock = $sku_tree->look_down("class", "availRed")->as_trimmed_text;
-	    if ( $stock =~ m{目前无货} ) {
+	    if ( $stock =~ m{目前无货} || $stock =~ m{缺货登记} ) {
 		$item->available("out of stock");
 	    }
 	}
