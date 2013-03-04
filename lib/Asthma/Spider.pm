@@ -5,6 +5,7 @@ use Asthma::Storage;
 with 'Asthma::UA';
 with 'Asthma::File';
 
+has 'depth' => (is => 'rw', isa => 'Int', default => 0);
 has 'urls' => (is => 'rw', isa => 'ArrayRef[Str]', default => sub { [] });
 has 'p_urls' => (is => 'rw', isa => 'ArrayRef[Str]', default => sub { [] });
 has 'chunk_num' => (is => 'rw', isa => 'Int', default => 0);

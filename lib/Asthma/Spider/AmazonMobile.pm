@@ -47,11 +47,15 @@ sub run {
 
     push @{$self->urls}, @{$self->start_urls};
 
+    my $i;
     while ( 1 ) {
+	$i++;
+	my $time = time;
 	$self->ifind;
 	$self->ido;
+	debug("loop $i done, cost " . (time - $time));
 	last unless @{$self->urls};
-	debug("******************next loop");
+        last if $self->depth && $i >= $self->depth;
     }
 }
 
