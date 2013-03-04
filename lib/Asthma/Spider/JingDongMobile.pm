@@ -17,11 +17,11 @@ use HTTP::Message;
 sub BUILD {
     my $self = shift;
     $self->site_id(102);
-    $self->start_urls([#'http://www.360buy.com/products/652-653-655.html',    # 手机
-		       #'http://www.360buy.com/products/670-671-672.html',    # 笔记本
+    $self->start_urls(['http://www.360buy.com/products/652-653-655.html',    # 手机
+		       'http://www.360buy.com/products/670-671-672.html',    # 笔记本
 		       'http://www.360buy.com/products/670-671-6864.html',   # 超级本
-		       #'http://www.360buy.com/products/670-671-1105.html',   # 上网本
-		       #'http://www.360buy.com/products/670-671-2694.html',   # 平板电脑
+		       'http://www.360buy.com/products/670-671-1105.html',   # 上网本
+		       'http://www.360buy.com/products/670-671-2694.html',   # 平板电脑
 		      ]);
 }
 
