@@ -73,12 +73,7 @@ sub ifind {
 		my $guard = $sem->guard;
 
 		http_get $url, 
-		headers => {
-		    "user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
-		    "Accept-Encoding" => "gzip, deflate",
-		    'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
-		    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-		},
+		headers => $self->headers,
 		Coro::rouse_cb;
 
 		my ($body, $hdr) = Coro::rouse_wait;
@@ -138,12 +133,7 @@ sub ido {
 		my $guard = $sem->guard;
 
 		http_get $url, 
-		headers => {
-		    "user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
-		    "Accept-Encoding" => "gzip, deflate",
-		    'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
-		    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-		},
+		headers => $self->headers,
 		Coro::rouse_cb;
 
 		my ($body, $hdr) = Coro::rouse_wait;

@@ -13,6 +13,15 @@ has 'site_id' => (is => 'rw', isa => 'Int');
 has 'start_url' => (is => 'rw', isa => 'Str');
 has 'start_urls' => (is => 'rw', isa => 'ArrayRef[Str]', default => sub { [] });
 has 'storage' => (is => 'rw', lazy_build => 1);
+has 'headers' => (is => 'rw', isa => 'HashRef', 
+		  default => sub { 
+		      {
+			  "user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
+			  "Accept-Encoding" => "gzip, deflate",
+			  'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
+			  'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		      } 
+		  });
 
 sub _build_storage {
     my $self = shift;
