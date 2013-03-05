@@ -36,7 +36,7 @@ sub wf {
 	$item->id($item->sku . "-" . $self->site_id);
 
 	my $doc = XML::Twig::Elt->new("doc");	
-	foreach my $attr ($item->meta->get_attribute_list) {
+	foreach my $attr (@{$item->solr_field}) {
 		next unless $item->$attr;
 		my $elt = XML::Twig::Elt->new(field => $item->$attr);
 		$elt->set_att(name => $attr);
