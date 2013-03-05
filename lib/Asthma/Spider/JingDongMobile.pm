@@ -166,6 +166,15 @@ sub parse {
 	    $item->title($sku_tree->look_down(_tag => 'h1')->as_trimmed_text);
 	}
 
+        # <div id="product-intro" >
+        if ( my $div = $sku_tree->look_down('id', 'product-intro') ) {
+ 	    if ( my $h3 = $div->look_down(_tag => 'h3')	 ) {
+		if ( $h3->as_trimmed_text =~ m{该商品已下柜} ) {
+		    $item->available('out of stock');
+		} 
+	    }
+	}
+
 	if ( $content =~ m{skuidkey\s*:\s*'(.+?)'} ) {
 	    $item->extra->{skuidkey} = $1;
 	}
@@ -217,6 +226,7 @@ sub get_stock {
 
     my @coros;
     foreach my $item ( @items ) {
+	next if $item->available eq 'out of stock';
 	my $stock_url = "http://price.360buy.com/stocksoa/StockHandler.ashx?callback=getProvinceStockCallback&type=ststock&skuid=" . $item->extra->{skuidkey} . "&provinceid=1&cityid=72&areaid=4137";
 
 	push @coros,
