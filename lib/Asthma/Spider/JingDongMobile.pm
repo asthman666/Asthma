@@ -226,7 +226,11 @@ sub get_stock {
 
     my @coros;
     foreach my $item ( @items ) {
-	next if $item->available eq 'out of stock';
+	if ($item->available eq 'out of stock') {
+	    debug_item($item);
+	    $self->add_item($item);
+	    next;
+	}
 	my $stock_url = "http://price.360buy.com/stocksoa/StockHandler.ashx?callback=getProvinceStockCallback&type=ststock&skuid=" . $item->extra->{skuidkey} . "&provinceid=1&cityid=72&areaid=4137";
 
 	push @coros,
