@@ -211,6 +211,8 @@ sub fprice {
 	    if ( $content =~ m/"jdPrice":\{.*?"amount"\s*:(.*?),/is ) {
 		my $price = $1;
 		$item->price($price);
+	    } else {
+		debug("ERROR: $hdr->{URL}, body: $body, content $content");
 	    }
 	};
     }
