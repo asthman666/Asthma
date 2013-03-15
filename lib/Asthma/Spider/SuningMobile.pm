@@ -6,115 +6,202 @@ use utf8;
 use Asthma::Item;
 use Asthma::Debug;
 use HTML::TreeBuilder;
-use AnyEvent;
+use Coro;
 use AnyEvent::HTTP;
 use HTTP::Headers;
 use HTTP::Message;
 use Data::Dumper;
 
-has 'json_ua' => (is => 'rw', isa => 'LWP::UserAgent', lazy_build => 1);
-
-sub _build_json_ua {
-    my $ua = LWP::UserAgent->new();
-    $ua->agent('Mozilla/5.0 (Windows NT 5.1; rv:18.0) Gecko/20100101 Firefox/18.0');
-    $ua->default_header('Accept' => 'application/json, text/javascript, */*');	
-    $ua->default_header('Accept-Language' => 'zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3');	
-    $ua->default_header('Accept-Encoding' => 'gzip, deflate');
-    $ua->default_header('X-Requested-With' => 'XMLHttpRequest');
-    return $ua;
-}
+has 'json_headers' => (is => 'rw', isa => 'HashRef', 
+                       default => sub {
+                           {
+                               'user-agent' => 'Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0',
+                               'Accept' => 'application/json, text/javascript, */*',
+                               "Accept-Encoding" => "gzip, deflate",
+                               'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
+                               'X-Requested-With' => 'XMLHttpRequest',
+                           }
+                       });
 
 sub BUILD {
     my $self = shift;
     $self->site_id(103);
-    $self->start_url('http://search.suning.com/emall/strd.do?ci=20006');
+    $self->start_url('http://www.suning.com/emall/pgv_10052_10051_1_.html');
 }
 
 sub run {
     my $self = shift;
 
-    my $start_url = $self->start_url;
+    $self->storage->redis->del($self->site_id);
 
-    foreach ( 0..20 ) {
-        my $url = $start_url;
-        $url .= "&cp=$_";
-        my $resp = $self->ua->get($url);        
-        $self->find($resp);
+    $self->find_start_urls;
+
+    my $i;
+    while ( 1 ) {
+	$i++;
+	my $time = time;
+	$self->ifind;
+	$self->ido;
+        my $length = $self->storage->redis->llen($self->site_id);
+        debug("$length items url in redis");
+	debug("loop $i done, cost " . (time - $time));
+	last unless @{$self->urls} || $length;
+        last if $self->depth && $i >= $self->depth;
     }
 }
 
-sub find {
+sub find_start_urls {
     my $self = shift;
-    my $resp = shift;
-    return unless $resp;
+    my $resp = $self->ua->get($self->start_url);
+
+    my %ca = map {$_ => 1} (2..13);
     
-    debug("process: " . $resp->request->uri->as_string);
-
-    my @plinks;
-
     if ( my $content = $resp->decoded_content ) {
         my $tree = HTML::TreeBuilder->new_from_content($content);
-        
-        foreach my $plist ( $tree->look_down("id", "proShow") ) {
-            foreach my $item ( $plist->look_down(_tag => "li", id => qr/\d+/) ) {
-                if ( my @item_links = $item->look_down(_tag => 'a') ) {
-                    my $link = $item_links[0]->attr("href");
-                    push @plinks, $link;
+        my $i;
+        foreach my $div ( $tree->look_down(_tag => 'div', class => 'listLeft') ) {
+            $i++;
+            if ( $ca{$i} ) {
+                foreach my $dd ( $div->look_down(_tag => 'dd') ) {
+                    foreach my $link ( $dd->look_down(_tag => 'a') ) {
+                        if ( my $url = $link->attr("href") ) {
+                            $url =~ s{&cityId=\{cityId\}}{}ig;
+                            push @{$self->urls}, $url;
+                            #return;
+                        }
+                    }
                 }
             }
         }
-        
-        $tree->delete;
+    }
+}
+
+sub ifind {
+    my $self = shift;
+
+    my $sem = Coro::Semaphore->new(30);
+    
+    my @coros;
+    my $run = 1;
+    while ( $run ) {
+	if ( my $url = pop(@{$self->urls}) ) {
+	    push @coros,
+	    async {
+		my $guard = $sem->guard;
+
+		http_get $url, 
+		headers => $self->headers,
+		Coro::rouse_cb;
+
+		my ($body, $hdr) = Coro::rouse_wait;
+
+		my $url = $hdr->{URL};
+		
+		debug("process $url");
+
+		my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
+		my $mess = HTTP::Message->new( $header, $body );
+
+                my @plinks;
+		if ( my $content = $mess->decoded_content ) {
+                    my $tree = HTML::TreeBuilder->new_from_content($content);
+
+                    # NOTE: find next page
+                    # <span><i id="pageThis">1</i>/<i id="pageTotal">15</i></span>
+		    if ( $tree->look_down('id', 'pageThis') ) {
+                        my $page_cur = $tree->look_down('id', 'pageThis')->as_trimmed_text;
+                        my $page_total = $tree->look_down('id', 'pageTotal')->as_trimmed_text;
+
+                        if ( $page_cur < $page_total ) {
+                            my $next_page_no = $page_cur;
+                            $url =~ s{&?cp=\d+}{}g;
+                            my $page_url = $url . "&cp=$next_page_no";
+                            debug("get next page_url: $page_url");
+                            push @{$self->urls}, $page_url;
+                        }
+		    }
+
+                    # NOTE: find item page
+                    foreach my $plist ( $tree->look_down("id", "proShow") ) {
+                        foreach my $item ( $plist->look_down(_tag => "li", id => qr/\d+/) ) {
+                            if ( my @item_links = $item->look_down(_tag => 'a') ) {
+                                my $link = $item_links[0]->attr("href");
+                                push @plinks, $link;
+                            }
+                        }
+                    }
+                    $tree->delete;
+                }
+
+                #debug("product links: " . Dumper \@plinks);
+
+                foreach my $url ( @plinks ) {
+                    $self->storage->redis->rpush($self->site_id, $url);
+                }
+	    }
+	} else {
+	    $run = 0;
+	}
     }
 
-    #debug("product links: " . Dumper \@plinks);
+    $_->join foreach ( @coros );        
+}
 
-    if ( @plinks ) {
-	my $cv = AnyEvent->condvar;
+sub ido {
+    my $self = shift;
+    
+    my $sem = Coro::Semaphore->new(30);
 
-	foreach my $url ( @plinks ) {
-	    my $sku;
-	    if ( $url =~ m{([^/]+)\.html} ) {
-		$sku = $1;
-	    }
+    my $i;
 
-	    $cv->begin;
-	    http_get $url, 
-	    headers => {
-		"user-agent" => "Mozilla/5.0 (Windows NT 6.1; rv:17.0) Gecko/20100101 Firefox/17.0",
-		"Accept-Encoding" => "gzip, deflate",
-		'Accept-Language' => "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
-		'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-	    },
+    my @coros;
+    my $run = 1;
+    while ( $run ) {
+	if ( my $url = $self->storage->redis->lpop($self->site_id) ) {
+            $i++;
+	    next if $url !~ m{([^/]+)\.html};
+	    my $sku = $1;
+	    
+	    push @coros,
+	    async {
+		my $guard = $sem->guard;
+                
+		http_get $url, 
+		headers => $self->headers,
+		Coro::rouse_cb;
 
-	    sub {
-		my ( $body, $hdr ) = @_;
+		my ($body, $hdr) = Coro::rouse_wait;
+		debug("$hdr->{Status} $hdr->{Reason} $hdr->{URL}");
 		
 		my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
 		my $mess = HTTP::Message->new( $header, $body );
 		my $content = $mess->decoded_content(charset => 'utf-8');
+
 		my $item = $self->parse($content);
-
-                # "partNumber":"000000000103329145"
-                my $part_num;
-                if ( $content =~ m{"partNumber":"(\d+)"}) {
-                    $part_num = $1;
-                }
-
+		
 		$item->sku($sku);
 		$item->url($url);
-
-                $self->get_stock($item, $part_num);
-                
-		debug_item($item);
-		
-		$self->add_item($item);
-		$cv->end;
+                return $item;
 	    }
+	} else {
+	    $run = 0;
 	}
-	$cv->recv;
+
+        $run = 0 if $i >= 100;
     }
 
+    my @items;
+    
+    foreach ( @coros ) {
+        my $item = $_->join;
+        push @items, $item;
+    }
+
+    # get price
+    $self->fprice(@items);
+    
+    # get stock
+    $self->get_stock(@items);
 }
 
 sub parse {
@@ -135,12 +222,9 @@ sub parse {
             }
 	}
 
-	#if ( $content =~ m{currPrice\s*=(.+?)&} ) {
-        #    my $price = $1;
-        #    $item->price($price);
-        #} else {
-	#    $item->available('out of stock');
-	#}
+        if ( $content =~ m{"partNumber":"(\d+)"}) {
+	    $item->extra->{part_num} = $1;
+        }
 
         if ( $sku_tree->look_down('id', 'preView_box') ) {
             if ( my $li = $sku_tree->look_down('id', 'preView_box')->look_down(_tag => 'li', class => 'cur') ) {
@@ -158,97 +242,127 @@ sub parse {
     return $item;
 }
 
-sub get_stock {
-    my $self = shift;
-    my $item = shift;
-    my $part_num = shift;
-    return unless $item;
-    return unless $item->url;
-
-    my $item_url = $item->url;
+sub fprice {
+    my $self  = shift;
+    my @items = @_;
     
-    # http://www.suning.com/emall/prd_10052_10051_-7_3782650_.html
-    if ( $item_url =~ m{prd_(\d+)_(\d+)_-(?:\d+)_(\d+)_\.html} ) {
-        my $store_id   = $1;
-        my $catalog_id = $2;
-        my $product_id = $3;
-        my $url = "http://www.suning.com/emall/SNProductStatusView?storeId=$store_id&catalogId=$catalog_id&productId=$product_id&cityId=9173&_=" . rand;
-        #debug("url: $url");
-        # { "salesOrg":"5016", "deptNo":"0001", "vendor":"0010035508", "promotionPrice":"5129.00", "itemPrice":"", "netPrice":"5129.00" } 
+    my $sem = Coro::Semaphore->new(30);
 
-        $self->json_ua->default_header('Referer' => $item_url);
+    my @coros;
+    foreach my $item ( @items ) {
+        my $item_url = $item->url;
+        
+        # http://www.suning.com/emall/prd_10052_10051_-7_3782650_.html
+        if ( $item_url =~ m{prd_(\d+)_(\d+)_-(?:\d+)_(\d+)_\.html} ) {
+            my $store_id   = $1;
+            my $catalog_id = $2;
+            my $product_id = $3;
 
-        my $resp = $self->json_ua->get($url);
-        my $content = $resp->decoded_content;
-
-        my $max_try = 3;
-        while ( $content =~ m{title} && $max_try ) {
-            # retry
-            debug("get resp for price: " . Dumper $resp);
-            debug("get content for price: $content");
-            debug("retry " . (4-$max_try) . " for price: $url");
-            $resp = $self->json_ua->get($url);
-            $content = $resp->decoded_content;
-            $max_try--;
-        }
-
-        #debug $content;
-
-        if ( $content =~ m{"promotionPrice":"(.+?)"} ) {
-            if ( my $price = $1 ) {
-                $item->price($price);
-            }
-        }
-
-        my ($sales_org, $dept_no, $vendor);
-        if ( $content =~ m{"salesOrg":"(\d+)"} ) {
-            $sales_org = $1;
-        }
-
-        if ( $content =~ m{"deptNo":"(\d+)"} ) {
-            $dept_no = $1;
-        }
-
-        if ( $content =~ m{"vendor":"(\d+)"} ) {
-            $vendor = $1;
-        }
-
-        # http://www.suning.com/emall/SNProductSaleView?storeId=10052&catalogId=10051&productId=2052998&salesOrg=5016&deptNo=0001&vendor=0010037230&partNumber=000000000102535623&cityId=9173&districtId=&_=1359689905024
-        if ( $sales_org && $dept_no && $vendor && $part_num ) {
-            my $url2 = "http://www.suning.com/emall/SNProductSaleView?storeId=$store_id&catalogId=$catalog_id&productId=$product_id&salesOrg=$sales_org&deptNo=$dept_no&vendor=$vendor&partNumber=$part_num&cityId=9173&districtId=&_=" . rand;
-            #debug("url2: $url2");
-            my $resp2 = $self->json_ua->get($url2);
-            my $content2 = $resp2->decoded_content;
+            $item->extra->{store_id}   = $store_id;
+            $item->extra->{catalog_id} = $catalog_id;
+            $item->extra->{product_id} = $product_id;
             
-            my $max_try2 = 3;
-            while ( $content2 !~ m{inventoryFlag} && $max_try2 ) {
-                debug("get resp for stock: " . Dumper $resp2);
-                debug("get content for stock: $content2");
-                debug("retry " . (4-$max_try2) . " for stock: $url2");
-                $resp2 = $self->json_ua->get($url2);
-                $content2 = $resp2->decoded_content;
-                $max_try2--;
-            }
+            my $price_url = "http://www.suning.com/emall/SNProductStatusView?storeId=$store_id&catalogId=$catalog_id&productId=$product_id&cityId=9173&_=" . rand;
+            push @coros,
+            async {
+                my $guard = $sem->guard;
+                my $json_headers = $self->json_headers;
+                $json_headers->{Referer} = $item_url;
 
-            if ( $content2 =~ m{"inventoryFlag":"(\d+)"} ) {
+                http_get $price_url,
+                headers => $json_headers,
+                Coro::rouse_cb;
+                
+                my ( $body, $hdr ) = Coro::rouse_wait;
+                
+		my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
+		my $mess = HTTP::Message->new( $header, $body );
+                my $content = $mess->decoded_content(charset => 'utf-8');
+
+                if ( $content =~ m{"promotionPrice":"(.+?)"} ) {
+                    if ( my $price = $1 ) {
+                        $item->price($price);
+                    }
+                } else {
+                    $item->available('out of stock');
+                }
+
+                my ($sales_org, $dept_no, $vendor);
+                if ( $content =~ m{"salesOrg":"(\d+)"} ) {
+                    $item->extra->{sales_org} = $1;
+                }
+
+                if ( $content =~ m{"deptNo":"(\d+)"} ) {
+                    $item->extra->{dept_no} = $1;
+                }
+
+                if ( $content =~ m{"vendor":"(\d+)"} ) {
+                    $item->extra->{vendor} = $1;
+                }
+            };
+        }
+    }
+
+    $_->join foreach ( @coros );
+}
+
+sub get_stock {
+    my $self  = shift;
+    my @items = @_;
+
+    my $sem = Coro::Semaphore->new(30);
+    
+    my @coros;
+    foreach my $item ( @items ) {
+	if ($item->available eq 'out of stock') {
+	    debug_item($item);
+	    $self->add_item($item);
+	    next;
+	}
+
+        my $item_url = $item->url;
+
+        my ($sales_org, $dept_no, $vendor, $part_num, $store_id, $catalog_id, $product_id) = ($item->extra->{sales_org}, $item->extra->{dept_no}, $item->extra->{vendor}, $item->extra->{part_num}, $item->extra->{store_id}, $item->extra->{catalog_id}, $item->extra->{product_id});
+        my $stock_url = "http://www.suning.com/emall/SNProductSaleView?storeId=$store_id&catalogId=$catalog_id&productId=$product_id&salesOrg=$sales_org&deptNo=$dept_no&vendor=$vendor&partNumber=$part_num&cityId=9173&districtId=&_=" . rand;
+
+	push @coros,
+	async {
+	    my $guard = $sem->guard;
+            my $json_headers = $self->json_headers;
+            $json_headers->{Referer} = $item_url;
+            
+            http_get $stock_url,
+            headers => $json_headers,
+            Coro::rouse_cb;
+            
+            my ( $body, $hdr ) = Coro::rouse_wait;
+
+            my $header = HTTP::Headers->new('content-encoding' => "gzip, deflate", 'content-type' => 'text/html');
+            my $mess = HTTP::Message->new( $header, $body );
+            my $content = $mess->decoded_content(charset => 'utf-8');
+            
+            if ( $content =~ m{"inventoryFlag":"(\d+)"} ) {
                 unless ( $1 ) {
                     $item->available('out of stock');
                 }
             } else {
                 $item->available('out of stock');
             }
-        }
-	
-	# NOTE: no price, no stock for suning
-	unless ( $item->price ) {
-	    $item->available('out of stock');
-	}
+	    
+	    debug_item($item);
+	    $self->add_item($item);
+	};
     }
+
+    $_->join foreach ( @coros );        
+    
+    return;
 }
 
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
 
 
