@@ -59,7 +59,7 @@ sub find_start_urls {
     if ( my $content = $resp->decoded_content ) {
         my $tree = HTML::TreeBuilder->new_from_content($content);
         my $i;
-        foreach my $div ( $tree->look_down(_tag => 'div', class => 'listLeft') ) {
+        foreach my $div ( $tree->look_down(_tag => 'div', sub {$_[0]->attr("class") eq 'listLeft' or $_[0]->attr("class") eq 'listRight'}) ) {
             $i++;
             if ( $ca{$i} ) {
                 foreach my $dd ( $div->look_down(_tag => 'dd') ) {
@@ -88,7 +88,7 @@ sub ifind {
     my @coros;
     my $run = 1;
     while ( $run ) {
-	if ( my $url = pop(@{$self->urls}) ) {
+	if ( my $url = shift(@{$self->urls}) ) {
 	    push @coros,
 	    async {
 		my $guard = $sem->guard;
