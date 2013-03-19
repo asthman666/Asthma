@@ -66,7 +66,11 @@ sub find_start_urls {
                     foreach my $link ( $dd->look_down(_tag => 'a') ) {
                         if ( my $url = $link->attr("href") ) {
                             $url =~ s{&cityId=\{cityId\}}{}ig;
-                            push @{$self->urls}, $url;
+                            if ( $url =~ m{^http://search\.suning\.com/emall/strd\.do\?ci=(\d+)$} ) {
+                                push @{$self->urls}, $url;
+                            } else {
+                                debug("$url can't match category url regex");
+                            }
                             #return;
                         }
                     }
