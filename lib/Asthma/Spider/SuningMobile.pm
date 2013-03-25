@@ -54,12 +54,12 @@ sub find_start_urls {
     my $self = shift;
     my $resp = $self->ua->get($self->start_url);
 
-    my %ca = map {$_ => 1} (2..13);
+    my %ca = map {$_ => 1} (2..26);
     
     if ( my $content = $resp->decoded_content ) {
         my $tree = HTML::TreeBuilder->new_from_content($content);
         my $i;
-        foreach my $div ( $tree->look_down(_tag => 'div', sub {$_[0]->attr("class") eq 'listLeft' or $_[0]->attr("class") eq 'listRight'}) ) {
+        foreach my $div ( $tree->look_down(_tag => 'div', sub {$_[0]->attr("class") && ($_[0]->attr("class") eq 'listLeft' or $_[0]->attr("class") eq 'listRight')}) ) {
             $i++;
             if ( $ca{$i} ) {
                 foreach my $dd ( $div->look_down(_tag => 'dd') ) {
