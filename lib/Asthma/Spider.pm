@@ -23,6 +23,12 @@ has 'headers' => (is => 'rw', isa => 'HashRef',
 		      } 
 		  });
 
+has 'item_url_id' => (is => 'rw', isa => 'Str', lazy => 1, default => sub { return $_[0]->site_id . ':item_url:id'});
+has 'list_url_id' => (is => 'rw', isa => 'Str', lazy => 1, default => sub { return $_[0]->site_id . ':list_url:id'});
+
+has 'item_url_link' => (is => 'rw', isa => 'Str', lazy => 1, default => sub { return $_[0]->site_id . ':item_url:link'});
+has 'list_url_link' => (is => 'rw', isa => 'Str', lazy => 1, default => sub { return $_[0]->site_id . ':list_url:link'});
+
 sub _build_storage {
     my $self = shift;
     my $storage = Asthma::Storage->new;

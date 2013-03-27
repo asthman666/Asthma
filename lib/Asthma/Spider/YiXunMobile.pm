@@ -11,12 +11,16 @@ use HTML::TreeBuilder;
 sub BUILD {
     my $self = shift;
     $self->site_id(105);
-    $self->start_url('http://list.51buy.com/311--------.html');
+    #$self->start_url('http://list.51buy.com/311--------.html');
+    $self->start_url('http://www.51buy.com/portal.html');
 }
 
 sub run {
     my $self = shift;
 
+    $self->find_list_urls;
+
+=for
     my $resp = $self->ua->get($self->start_url);
     
     $self->find($resp);
@@ -29,6 +33,29 @@ sub run {
 	} else {
 	    $run = 0;
 	}
+    }
+=cut
+}
+
+sub find_list_urls {
+    my $self = shift;
+    my $resp = $self->ua->get($self->start_url);
+
+    $self->storage->redis_db->execute('SET', $self->list_url_id, 0);  # set list url id init value to '0'
+    $self->storage->redis_db->execute('ZREMRANGEBYRANK', $self->list_url_link, 0, -1);  # remove all url save in list url
+
+    if ( my $content = $resp->decoded_content ) {
+        my $tree = HTML::TreeBuilder->new_from_content($content);
+        if ( my $div = $tree->look_down('id', 'protal_list') ) {
+            foreach my $dd ( $div->look_down(_tag => 'dd') ) {
+                foreach my $link ( $dd->look_down(_tag => 'a') ) {
+                    my $url = $link->attr("href");
+                    $self->storage->redis_db->execute('INCR', $self->list_url_id);
+                    my $id = $self->storage->redis_db->execute('GET', $self->list_url_id);
+                    $self->storage->redis_db->execute('ZADD', $self->list_url_link, $id, $url);
+                }
+            }
+        }
     }
 }
 
