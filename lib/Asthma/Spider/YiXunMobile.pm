@@ -7,37 +7,39 @@ use utf8;
 use Asthma::Item;
 use Asthma::Debug;
 use HTML::TreeBuilder;
+use Data::Dumper;
+use Coro;
+use AnyEvent::HTTP;
+use HTTP::Headers;
+use HTTP::Message;
 
 sub BUILD {
     my $self = shift;
     $self->site_id(105);
-    #$self->start_url('http://list.51buy.com/311--------.html');
     $self->start_url('http://www.51buy.com/portal.html');
 }
 
 sub run {
     my $self = shift;
+    $self->start_find_urls;
 
-    $self->find_list_urls;
+    $self->storage->redis_db->execute('SET', $self->item_url_id, 0);
+    $self->storage->redis_db->execute('ZREMRANGEBYRANK', $self->item_url_link, 0, -1);
 
-=for
-    my $resp = $self->ua->get($self->start_url);
-    
-    $self->find($resp);
-
+    my $loop = 0;
     my $run = 1;
     while ( $run ) {
-	if ( my $url  = shift @{$self->urls} ) {
-	    my $resp = $self->ua->get($url);
-	    $self->find($resp);
-	} else {
-	    $run = 0;
-	}
+        last unless $self->find_urls($loop++);
     }
-=cut
+
+    $loop = 0;
+    $run = 1;
+    while ( $run ) {
+        last unless $self->parse_item_urls($loop++);
+    }
 }
 
-sub find_list_urls {
+sub start_find_urls {
     my $self = shift;
     my $resp = $self->ua->get($self->start_url);
 
@@ -52,85 +54,164 @@ sub find_list_urls {
                     my $url = $link->attr("href");
                     $self->storage->redis_db->execute('INCR', $self->list_url_id);
                     my $id = $self->storage->redis_db->execute('GET', $self->list_url_id);
-                    $self->storage->redis_db->execute('ZADD', $self->list_url_link, $id, $url);
-                }
-            }
-        }
-    }
-}
-
-sub find {
-    my $self = shift;
-    my $resp = shift;
-    return unless $resp;
-
-    my $content = $resp->decoded_content;
-
-    debug("process: " . $resp->request->uri->as_string);
-
-    if ( my $tree = HTML::TreeBuilder->new_from_content($content) ) {
-        if ( $tree->look_down('class', 'page-next') ) {
-            if ( my $page_url = $tree->look_down('class', 'page-next')->attr('href') ) {
-                debug("get next page_url: $page_url");
-                push @{$self->urls}, $page_url;
-            }
-        }
-
-        # parse list page
-        # <ul class="list_goods">
-        my @chunks;
-        if ( my $list = $tree->look_down(_tag => "ul", class => "list_goods") ) {
-            @chunks = $list->look_down(_tag => "li", class => "item_list");
-        }
-
-        foreach my $c ( @chunks ) {
-            my $item = Asthma::Item->new();
-            
-            # class="link_name">
-            if ( $c->look_down('class', 'link_name') ) {
-                my $title = $c->look_down('class', 'link_name')->as_trimmed_text;
-                $item->title($title);
-            }
-
-            # class="price_icson"
-            if ( my $p = $c->look_down('class', 'price_icson') ) {
-                if ( $p->look_down('class', 'hot') ) {
-                    if ( my $price = $p->look_down('class', 'hot')->as_trimmed_text ) {
-                        $item->price($price);
+                    if ( $self->storage->redis_db->execute('ZADD', $self->list_url_link, $id, $url) ) {
+                        debug("add list url $url success");
+                    } else {
+                        debug("add list url $url failed");
                     }
                 }
             }
+        }
+	$tree->delete;
+    }
+}
 
-            if ( my $pic = $c->look_down("class", "link_pic") ) {
-                if ( my $url = $pic->attr("href") ) {
+sub find_urls {
+    my ($self, $loop) = @_;
+
+    my $start = $loop*100;
+    my $end   = $start + 99;
+    
+    debug("start: $start, end: $end");
+
+    my $urls = $self->storage->redis_db->execute('ZRANGE', $self->list_url_link, $start, $end);
+
+    if ( @$urls ) {
+        my $sem = Coro::Semaphore->new(100);
+        my @coros;
+
+        foreach my $url ( @$urls ) {
+            push @coros,
+            async {
+                my $guard = $sem->guard;
+
+                http_get $url,
+                headers => $self->headers,
+                Coro::rouse_cb;
+
+                my ($body, $hdr) = Coro::rouse_wait;
+
+                debug("process $hdr->{URL}");
+
+                my $header = HTTP::Headers->new('content-encoding' => 'gzip, deflate', 'content-type' => 'text/html');
+                my $mess = HTTP::Message->new( $header, $body );
+                
+                if ( my $content = $mess->decoded_content(charset => 'gbk') ) {
+                    my $tree = HTML::TreeBuilder->new_from_content($content);
+                    if ( my $ul = $tree->look_down(_tag => 'ul', class => 'list_goods') ) {
+                        foreach my $li ( $ul->look_down(_tag => 'li', class => 'item_list') ) {
+                            my $item_url = $li->look_down(_tag => 'a', class => 'link_pic')->attr('href');
+                            $self->storage->redis_db->execute('INCR', $self->item_url_id);
+                            my $id = $self->storage->redis_db->execute('GET', $self->item_url_id);
+                            if ( $self->storage->redis_db->execute('ZADD', $self->item_url_link, $id, $item_url) ) {
+                                debug("add item url $item_url success");
+                            } else {
+                                debug("add item url $item_url failed");
+                            }
+                        }
+                    }
+
+
+                    if ( $tree->look_down('class', 'page-next') ) {
+                        if ( my $page_url = $tree->look_down('class', 'page-next')->attr('href') ) {
+                            $page_url =~ s{#.*}{};
+                            $self->storage->redis_db->execute('INCR', $self->list_url_id);
+                            my $id = $self->storage->redis_db->execute('GET', $self->list_url_id);
+                            if ( $self->storage->redis_db->execute('ZADD', $self->list_url_link, $id, $page_url) ) {
+                                debug("add next page_url $page_url success");
+                            } else {
+                                debug("add next page_url $page_url failed");
+                            }
+                        }
+                    }
+		    $tree->delete;
+                }
+            }
+        }
+
+        $_->join foreach ( @coros );
+
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+sub parse_item_urls {
+    my ($self, $loop) = @_;
+    my $start = 100*$loop;
+    my $end   = $start+99;
+    debug("start: $start, end: $end");
+
+    my $urls = $self->storage->redis_db->execute('ZRANGE', $self->item_url_link, $start, $end);
+    
+    if ( @$urls ) {
+        my $sem = Coro::Semaphore->new(100);
+        my @coros;
+
+        foreach my $url ( @$urls ) {
+            push @coros,
+            async {
+                my $guard = $sem->guard;
+
+                http_get $url,
+                headers => $self->headers,
+                Coro::rouse_cb;
+
+                my ($body, $hdr) = Coro::rouse_wait;
+
+                debug("process $hdr->{URL}");
+
+                my $header = HTTP::Headers->new('content-encoding' => 'gzip, deflate', 'content-type' => 'text/html');
+                my $mess = HTTP::Message->new( $header, $body );
+
+                if ( my $content = $mess->decoded_content() ) {
+                    my $item = Asthma::Item->new();
+
                     if ( $url =~ m{item-(\d+)\.html} ) {
                         $item->url($url);
                         my $sku = $1;
                         $item->sku($sku);
                     }
+
+                    if ( $content =~ m{var\s+itemInfo\s+=\s+\{.*?"name"\s*:\s*"(.+?)"} ) {
+                        my $title = $1;
+                        $item->title($title);
+                    }
+
+                    my $api_url = "http://item.51buy.com/json.php?mod=item&act=getdynamiciteminfo&pid=" . $item->sku . "&whid=1&prid=1&_=" . time;
+                    my $resp = $self->{ua}->get($api_url);
+                    my $api_content = $resp->decoded_content;
+                    
+                    if ( $api_content =~ m{"price":"([\d.]+)} ) {
+                        my $price = $1;
+                        $item->price($price);
+                    }
+
+                    if ( $api_content =~ m{"stock_show":"(.+?)"} ) {
+                        my $stock = $1;
+                        if ( $stock !~ m{有货} ) {
+                            $item->available('out of stock');
+                        }
+                    }
+
+                    debug_item($item);
+                    $self->add_item($item);
                 }
             }
-
-            if ( $content =~ m{<img _src="(.+?)"} ) {
-                my $image_url = $1;
-                $item->image_url($image_url);
-            }
-
-	    
-	    my $con = $c->as_trimmed_text;
-	    if ( $con =~ m{到货通知} ) {
-                $item->available('out of stock');
-	    }
-
-            debug_item($item);
-            $self->add_item($item);
         }
-        
-        $tree->delete;
-    }
+
+        $_->join foreach ( @coros );
+
+        return 1;
+    } else {
+        return 0;
+    }    
+
 }
 
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
