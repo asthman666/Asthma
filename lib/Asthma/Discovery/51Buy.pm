@@ -89,8 +89,8 @@ sub find_urls {
 
                 debug("process $hdr->{URL}");
 
-                #my $header = HTTP::Headers->new('content-encoding' => 'gzip, deflate', 'content-type' => 'text/html');
-                my $header = HTTP::Headers->new('content-type' => 'text/html');
+                my $header = HTTP::Headers->new('content-encoding' => 'gzip, deflate', 'content-type' => 'text/html');
+                #my $header = HTTP::Headers->new('content-type' => 'text/html');
                 my $mess = HTTP::Message->new( $header, $body );
                 
                 if ( my $content = $mess->decoded_content(charset => 'gbk') ) {
