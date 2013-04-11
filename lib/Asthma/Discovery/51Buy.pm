@@ -27,10 +27,11 @@ sub run {
 
     $self->start_find_urls;
 
-    my $loop = 0;
     my $run = 1;
+
+    my $start = 0;
     while ( $run ) {
-        last unless $self->find_urls($loop++);
+        last unless $start = $self->find_urls($start);
     }
 }
 
@@ -63,11 +64,15 @@ sub start_find_urls {
 }
 
 sub find_urls {
-    my ($self, $loop) = @_;
+    my ($self, $start) = @_;
 
-    my $start = $loop*100;
-    my $end   = $start + 99;
-    
+    my $end = $start + 99;
+
+    my $count = $self->storage->redis_db->execute('ZCARD', $self->list_url_link);
+    if ( $count < $end ) {
+        $end = $count - 1;
+    }
+
     debug("start: $start, end: $end");
 
     my $urls = $self->storage->redis_db->execute('ZRANGE', $self->list_url_link, $start, $end);
@@ -140,7 +145,7 @@ sub find_urls {
 
         $_->join foreach ( @coros );
 
-        return 1;
+        return $end + 1;
     } else {
         return 0;
     }
@@ -149,4 +154,5 @@ sub find_urls {
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
