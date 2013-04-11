@@ -62,8 +62,6 @@ sub start_find_urls {
     my @urls = $self->list_link_extractor->extract_links($resp);
 
     foreach my $url ( @urls ) {
-        next if ( $url ne 'http://list.jd.com/737-1277-5005.html' );
-
         if ( my $score = $self->storage->redis_db->execute('ZSCORE', $self->list_url_link, $url) ) {
             debug("$url exists in key '" . $self->list_url_link . "' with score $score");
         } else {
