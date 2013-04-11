@@ -23,12 +23,21 @@ sub _build_html_linkextor {
 }
 
 sub extract_links {
-    my $self = shift;
-    my $resp = shift;
+    my $self  = shift;
 
-    my $base_uri = $resp->base;
+    my ( $content, $base_uri );
+    if ( @_ == 2 ) {
+        ($content, $base_uri) = @_;
+        if ( $content =~ m{<\s*base\s+href="(.+?)"\s*/?>}i ) {
+            $base_uri = $1;
+        }
+    } elsif ( @_ == 1 ) {
+        my $resp = shift;
+        $base_uri = $resp->base;
+        $content = $resp->decoded_content;
+    }
+    return unless $content;
 
-    my $content = $resp->decoded_content;
     $self->html_linkextor->parse($content);
     my @links = $self->html_linkextor->links;
 
@@ -87,3 +96,4 @@ __PACKAGE__->meta->make_immutable;
 
 
 1;
+
