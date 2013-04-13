@@ -2,8 +2,10 @@ package Asthma::Storage;
 use Moose;
 use Redis;
 use RedisDB;
+use Asthma::Schema;
 use namespace::autoclean;
 
+has 'mysql' => (is => 'rw', isa => 'Asthma::Schema', lazy_build => 1);
 has 'redis' => (is => 'rw', isa => 'Redis', lazy_build => 1);
 has 'redis_db' => (is => 'rw', isa => 'RedisDB', lazy_build => 1);
 
@@ -17,6 +19,11 @@ sub _build_redis_db {
     my $self = shift;
     my $redis_db = RedisDB->new();
     return $redis_db;
+}
+
+sub _build_mysql {
+    my $self = shift;
+    return Asthma::Schema->connect('dbi:mysql:asthma', 'foo', 'bar');
 }
 
 __PACKAGE__->meta->make_immutable;
