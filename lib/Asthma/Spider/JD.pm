@@ -22,21 +22,25 @@ sub BUILD {
 sub run {
     my $self = shift;
 
-    my $loop = 0;
+    my $page = 1;
     my $run = 1;
     while ( $run ) {
-        last unless $self->parse_item_urls($loop++);
+        last unless $self->parse_item_urls($page++);
     }
 }
 
 sub parse_item_urls {
-    my ($self, $loop) = @_;
-    my $start = 100*$loop;
-    my $end   = $start+99;
+    my ($self, $page) = @_;
+    my $rows = 100;
+    debug("page: $page, rows: $rows");
 
-    debug("start: $start, end: $end");
+    my $urls = [$self->storage->mysql->resultset($self->site_id . 'ItemUrls')->search(
+		    undef,
+		    {
+			page => $page,
+			rows => $rows,
+		    })];
 
-    my $urls = $self->storage->redis_db->execute('ZRANGE', $self->item_url_link, $start, $end);
 
     if ( @$urls ) {
         # parse
@@ -50,7 +54,7 @@ sub parse_item_urls {
 
         foreach my $item ( @items ) {
             debug_item($item);
-            #$self->add_item($item);
+            $self->add_item($item);
         }
 
         return 1;
@@ -69,7 +73,9 @@ sub parse {
     my $sem = Coro::Semaphore->new(30);
     my @coros;
 
-    foreach my $url ( @$urls ) {
+    foreach my $url_object ( @$urls ) {
+	my $url = $url_object->link;
+
         push @coros,
         async {
             my $guard = $sem->guard;
