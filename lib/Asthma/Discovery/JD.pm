@@ -10,45 +10,39 @@ use Asthma::Debug;
 use HTML::TreeBuilder;
 use Data::Dumper;
 use Asthma::LinkExtractor;
+use Digest::MD5 qw(md5_base64);
 
 has 'list_link_extractor' => (is => 'rw', lazy_build => 1);
 has 'item_link_extractor' => (is => 'rw', lazy_build => 1);
 
 sub _build_list_link_extractor {
     my $self = shift;
-    return Asthma::LinkExtractor->new();
+    my $link_extractor = Asthma::LinkExtractor->new();
+    $link_extractor->allow(['list\.jd\.com/652-']);
+    $link_extractor->allow(['list\.jd\.com/737-']);
+    $link_extractor->allow(['list\.jd\.com/670-']);
+    return $link_extractor;
 }
 
 sub _build_item_link_extractor {
     my $self = shift;
-    return Asthma::LinkExtractor->new();
+    my $link_extractor = Asthma::LinkExtractor->new();
+    $link_extractor->allow(['item\.jd\.com/\d+\.html']);
+    return $link_extractor;
 }
 
 sub BUILD {
     my $self = shift;
     $self->site_id(102);
-
-    $self->list_link_extractor->allow(['list\.jd\.com']);
-    $self->list_link_extractor->deny(['/1713-']);
-
-    $self->item_link_extractor->allow(['item\.jd\.com/\d+\.html']);
-
     $self->start_url('http://www.jd.com/allSort.aspx');
 }
 
 sub run {
     my $self = shift;
-
-    $self->storage->redis_db->execute('SET', $self->item_url_id, 0);
-    $self->storage->redis_db->execute('ZREMRANGEBYRANK', $self->item_url_link, 0, -1);
-
-    $self->storage->redis_db->execute('SET', $self->list_url_id, 0);  # set list url id init value to '0'
-    $self->storage->redis_db->execute('ZREMRANGEBYRANK', $self->list_url_link, 0, -1);  # remove all url save in list url
-
+    
     $self->start_find_urls;
 
     my $run = 1;
-
     my $start = 0;
     while ( $run ) {
         last unless $start = $self->find_urls($start);
@@ -58,43 +52,54 @@ sub run {
 sub start_find_urls {
     my $self = shift;
     my $resp = $self->ua->get($self->start_url);
-
     my @urls = $self->list_link_extractor->extract_links($resp);
 
     foreach my $url ( @urls ) {
-        if ( my $score = $self->storage->redis_db->execute('ZSCORE', $self->list_url_link, $url) ) {
-            debug("$url exists in key '" . $self->list_url_link . "' with score $score");
-        } else {
-            $self->storage->redis_db->execute('INCR', $self->list_url_id);
-            my $id = $self->storage->redis_db->execute('GET', $self->list_url_id);
-            if ( $self->storage->redis_db->execute('ZADD', $self->list_url_link, $id, $url) ) {
-                debug("add score: $id, url: $url to key: '" . $self->list_url_link . "' success");
-            } else {
-                debug("add score: $id, url: $url to key: '" . $self->list_url_link . "' failed");
-            }
-        }
+	my $md5_link = md5_base64($url);
+	my $now = "now()";
+
+	my $u = $self->storage->mysql->resultset('102ListUrls')->find_or_new({ link => $url,
+									       md5_link => $md5_link,
+									       dt_created => \$now,
+									       dt_updated => \$now,
+									     }, {key => 'md5_link'});
+	if ( ! $u->in_storage ) {
+	    debug("url $url with md5 $md5_link need to be added");
+	    $u->insert;
+	} else {
+	    debug("url $url with md5 $md5_link and list_url_id " . $u->list_url_id . " exists");
+	}
     }
 }
 
 sub find_urls {
     my ($self, $start) = @_;
 
-    my $end = $start + 99;
+    my $rows = 100;
+    my $urls = [$self->storage->mysql->resultset($self->site_id . 'ListUrls')->search(
+		    undef,
+		    {
+			offset => $start,
+			rows   => $rows,
+		    })];
 
-    my $count = $self->storage->redis_db->execute('ZCARD', $self->list_url_link);
-    if ( $count < $end ) {
-        $end = $count - 1;
+
+    my $rs = $self->storage->mysql->resultset($self->site_id . 'ListUrls')->search();
+    my $count = $rs->count;
+    
+    if ( $count < ($start+$rows) ) {
+	$rows = $count - $start;
     }
 
-    debug("start: $start, end: $end");
-
-    my $urls = $self->storage->redis_db->execute('ZRANGE', $self->list_url_link, $start, $end);
+    debug("start: $start, rows: $rows");
 
     if ( @$urls ) {
         my $sem = Coro::Semaphore->new(100);
         my @coros;
 
-        foreach my $url ( @$urls ) {
+        foreach my $url_object ( @$urls ) {
+	    my $url = $url_object->link;
+
             push @coros,
             async {
                 my $guard = $sem->guard;
@@ -113,17 +118,20 @@ sub find_urls {
                 
                 my @item_urls = $self->item_link_extractor->extract_links($content, $url);
                 foreach my $item_url ( @item_urls ) {
-                    if ( my $score = $self->storage->redis_db->execute('ZSCORE', $self->item_url_link, $item_url) ) {
-                        debug("$item_url exists in key '" . $self->item_url_link . "' with score $score");
-                    } else {
-                        $self->storage->redis_db->execute('INCR', $self->item_url_id);
-                        my $id = $self->storage->redis_db->execute('GET', $self->item_url_id);
-                        if ( $self->storage->redis_db->execute('ZADD', $self->item_url_link, $id, $item_url) ) {
-                            debug("add score: $id, url: $item_url to key: '" . $self->item_url_link . "' success");
-                        } else {
-                            debug("add score: $id, url: $item_url to key: '" . $self->item_url_link . "' failed");
-                        }
-                    }
+		    my $md5_link = md5_base64($item_url);
+		    my $now = "now()";
+
+		    my $u = $self->storage->mysql->resultset($self->site_id . 'ItemUrls')->find_or_new({ link => $item_url,
+													 md5_link => $md5_link,
+													 dt_created => \$now,
+													 dt_updated => \$now,
+												       }, {key => 'md5_link'});
+		    if ( ! $u->in_storage ) {
+			debug("url $item_url with md5 $md5_link need to be added");
+			$u->insert;
+		    } else {
+			debug("url $item_url with md5 $md5_link and item_url_id " . $u->item_url_id . " exists");
+		    }
                 }
 
                 my $tree = HTML::TreeBuilder->new_from_content($content);
@@ -132,17 +140,20 @@ sub find_urls {
                         if ( my $page_url = $tree->look_down('class', 'pagin pagin-m')->look_down("class", "next")->attr("href") ) {
                             $page_url = URI->new_abs($page_url, $url)->as_string;
                             
-                            if ( my $score = $self->storage->redis_db->execute('ZSCORE', $self->list_url_link, $page_url) ) {
-                                debug("$page_url exists in key '" . $self->list_url_link . "' with score $score");
-                            } else {
-                                $self->storage->redis_db->execute('INCR', $self->list_url_id);
-                                my $id = $self->storage->redis_db->execute('GET', $self->list_url_id);
-                                if ( $self->storage->redis_db->execute('ZADD', $self->list_url_link, $id, $page_url) ) {
-                                    debug("add score: $id, url: $page_url to key: '" . $self->list_url_link . "' success");
-                                } else {
-                                    debug("add score: $id, url: $page_url to key: '" . $self->list_url_link . "' failed");
-                                }
-                            }                            
+			    my $md5_link = md5_base64($page_url);
+			    my $now = "now()";
+
+			    my $u = $self->storage->mysql->resultset($self->site_id . 'ListUrls')->find_or_new({ link => $page_url,
+														 md5_link => $md5_link,
+														 dt_created => \$now,
+														 dt_updated => \$now,
+													       }, {key => 'md5_link'});
+			    if ( ! $u->in_storage ) {
+				debug("url $page_url with md5 $md5_link need to be added");
+				$u->insert;
+			    } else {
+				debug("url $page_url with md5 $md5_link and list_url_id " . $u->list_url_id . " exists");
+			    }
                         }
                     }
                 }
@@ -152,7 +163,7 @@ sub find_urls {
 
         $_->join foreach ( @coros );
 
-        return $end + 1;
+        return $start+$rows;
     } else {
         return 0;
     }
