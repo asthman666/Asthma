@@ -108,24 +108,29 @@ sub set_stock {
         $stock_url = "http://busystock.i.yihaodian.com/restful/detail?mcsite=1&provinceId=26&pmId=$sku";
     }
 
-    my $resp = $self->ua->get($stock_url);
-    my $stock_content = $resp->decoded_content;
-
     debug("url:$url");
     debug("stock:$stock_url");
-    debug $stock_content;
 
-    use JSON;
-    my $ref = decode_json($stock_content);
+    my $resp = $self->ua->get($stock_url);
+    if ( $resp->is_success ) {
+        if ( my $stock_content = $resp->decoded_content ) {
+            debug("stock content: $stock_content");
 
-    #debug Dumper $ref;
+            use JSON;
+            my $ref = decode_json($stock_content);
 
-    if ( $ref->{currentPrice} ) {
-	$item->price($ref->{currentPrice});
-    }
+            #debug Dumper $ref;
 
-    if ( $ref->{currentStockNum} <= 0 ) {
-	$item->available('out of stock');
+            if ( $ref->{currentPrice} ) {
+                $item->price($ref->{currentPrice});
+            }
+
+            if ( $ref->{currentStockNum} <= 0 ) {
+                $item->available('out of stock');
+            }
+        }
+    } else {
+        debug("resp status_line: " . $resp->status_line);
     }
 }
 
@@ -133,6 +138,7 @@ sub set_stock {
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
 
 
