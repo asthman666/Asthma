@@ -1,119 +1,119 @@
 package Asthma::Spider::DangDang;
-
 use Moose;
 extends 'Asthma::Spider';
 
 use utf8;
 use Asthma::Item;
-use HTML::TreeBuilder;
-use URI;
 use Asthma::Debug;
-
-# NOTE: before version 5.00 of HTML::Element, you had to call delete when you were finished with the tree, or your program would leak memory.
+use Data::Dumper;
+use Coro;
+use AnyEvent::HTTP;
+use HTTP::Headers;
+use HTTP::Message;
+use HTML::TreeBuilder;
 
 sub BUILD {
     my $self = shift;
     $self->site_id(101);
-    $self->start_url('http://searchb.dangdang.com/?category_path=01.00.00.00.00.00');
 }
 
 sub run {
     my $self = shift;
 
-    my $resp = $self->ua->get($self->start_url);
-    
-    $self->find($resp);
-
+    my $page = 1;
     my $run = 1;
     while ( $run ) {
-	if ( my $url  = shift @{$self->urls} ) {
-	    my $resp = $self->ua->get($url);
-	    $self->find($resp);
-	} else {
-	    $run = 0;
-	}
+        last unless $self->parse_item_urls($page++);
+        last;
     }
 }
 
-sub find {
-    my $self = shift;
-    my $resp = shift;
-    return unless $resp;
+sub parse_item_urls {
+    my ($self, $page) = @_;
+    my $rows = 10;
+    debug("page: $page, rows: $rows");
 
-    my $content = $resp->decoded_content;
+    my $urls = [$self->storage->mysql->resultset($self->site_id . 'ItemUrl')->search(
+		    undef,
+		    {
+			page => $page,
+			rows => $rows,
+		    })];
 
-    my @urls;
-    my $tree = HTML::TreeBuilder->new_from_content($content);
+    if ( @$urls ) {
+        my $sem = Coro::Semaphore->new(100);
+        my @coros;
 
-    # <div class="listitem detail">
-    # <li class="maintitle" name="Name"> 
-    if ( my @divs = $tree->look_down('class', 'listitem detail') ) {
-	foreach my $div ( @divs ) {
-	    if ( my $name_chunk = $div->look_down(class => 'maintitle', name => 'Name') ) {
-		if ($name_chunk->look_down(_tag => 'a')) {
-		    push @urls, $name_chunk->look_down(_tag => 'a')->attr('href');
-		}
-	    }
-	}
-    }
+        foreach my $url_object ( @$urls ) {
+	    my $url = $url_object->link;
 
-    if ( $tree->look_down(class => 'pagebtn', name => 'link_page_next') ) {
-	my $page_url = $tree->look_down(class => 'pagebtn', name => 'link_page_next')->attr('href');
-	$page_url = URI->new_abs($page_url, $resp->base)->as_string;
-	debug("get next page_url: $page_url");
-	push @{$self->urls}, $page_url;
-    }
+            push @coros,
+            async {
+                my $guard = $sem->guard;
 
-    $tree->delete;
-    
-    foreach my $url ( @urls ) {
-	my $sku;
-	if ( $url =~ m{product_id=(\d+)} ) {
-	    $sku = $1;	
-	} else {
-	    next;
+                http_get $url,
+                headers => $self->headers,
+                Coro::rouse_cb;
+
+                my ($body, $hdr) = Coro::rouse_wait;
+                
+                my $header = HTTP::Headers->new('content-encoding' => 'gzip, deflate', 'content-type' => 'text/html');
+                my $mess = HTTP::Message->new( $header, $body );
+
+                if ( my $content = $mess->decoded_content() ) {
+                    my $sku_tree = HTML::TreeBuilder->new_from_content($content);
+
+                    my $item = Asthma::Item->new();
+                    if ( my $h1 = $sku_tree->look_down(_tag => 'h1') ) {
+                        if ( my @titles = $h1->content_list ) {
+                            $item->title($titles[0]);
+                        }
+                    }
+
+                    if ( $url =~ m{product\.aspx\?product_id=(\d+)} ) {
+                        my $sku = $1;
+                        $item->sku($sku);
+                        $item->url($url);
+                    }
+
+                    if ( my $i = $sku_tree->look_down('id', 'promo_price') ) {
+                        if ( my $price = $i->as_trimmed_text ) {
+                            $price = (split(/-/, $price))[0];
+                            $item->price($price);
+                        }
+                    } elsif ( my $span = $sku_tree->look_down('id', 'salePriceTag') ) {
+                        if ( my $price = $span->as_trimmed_text ) {
+                            $item->price($price);
+                        }
+                    }
+
+                    if ( $content =~ m{暂时缺货} ) {
+                        $item->available('out of stock');
+                    }
+                    
+                    $sku_tree->delete;
+                    
+                    debug_item($item);
+                    $self->add_item($item);
+                }
+            }
         }
-	my $resp = $self->ua->get($url);
 
-	my $content = $resp->decoded_content;
-	my $sku_tree = HTML::TreeBuilder->new_from_content($content);
+        $_->join foreach ( @coros );
 
-	my $item = Asthma::Item->new();
+        return 1;
+    } else {
+        return 0;
+    }    
 
-	$item->sku($sku);
-	$item->url($url);
-
-	if ( $sku_tree->look_down(_tag => 'h1') ) {
-	    $item->title($sku_tree->look_down(_tag => 'h1')->as_trimmed_text);
-	}
-
-	if ( $sku_tree->look_down('id', 'd_price') ) {
-	    $item->price($sku_tree->look_down('id', 'd_price')->as_trimmed_text);
-	}
-
-        #id="largePic"
-	if ( $sku_tree->look_down('id', 'largePic') ) {
-	    if ( $sku_tree->look_down('id', 'largePic')->attr('wsrc') ) {
-		$item->image_url($sku_tree->look_down('id', 'largePic')->attr('wsrc'));
-	    }
-	}
-
-	$sku_tree->delete;
-
-	if ( $content =~ m{I S B N：</i>(\d+)} ) {
-	    my $ean = $1;
-	    $item->ean($ean);
-	}
-
-	debug_item($item);
-	
-        $self->add_item($item);
-    }
 }
-
 
 __PACKAGE__->meta->make_immutable;
 
 1;
+
+
+
+
 
 
