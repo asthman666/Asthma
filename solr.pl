@@ -25,7 +25,7 @@ foreach my $file ( @files ) {
 
 foreach my $file ( @files ) {
     debug("file $file will be posted to solr");
-    sleep 3;
+    sleep 2;
     open my $fh, "<", $file;
     my $str = do {local $/; <$fh>};
     close $fh;
