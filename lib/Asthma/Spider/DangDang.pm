@@ -55,11 +55,15 @@ sub parse_item_urls {
                 Coro::rouse_cb;
 
                 my ($body, $hdr) = Coro::rouse_wait;
+
+		debug("$hdr->{Status} $hdr->{Reason} $hdr->{URL}");
+		#debug Dumper $hdr;
+		return if ( $hdr->{URL} =~ /404/ );
                 
                 my $header = HTTP::Headers->new('content-encoding' => 'gzip, deflate', 'content-type' => 'text/html');
                 my $mess = HTTP::Message->new( $header, $body );
 
-                if ( my $content = $mess->decoded_content() ) {
+                if ( my $content = $mess->decoded_content(charset => 'gbk') ) {
                     my $sku_tree = HTML::TreeBuilder->new_from_content($content);
 
                     my $item = Asthma::Item->new();
