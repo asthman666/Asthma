@@ -24,13 +24,12 @@ sub run {
     my $run = 1;
     while ( $run ) {
         last unless $self->parse_item_urls($page++);
-        last;
     }
 }
 
 sub parse_item_urls {
     my ($self, $page) = @_;
-    my $rows = 10;
+    my $rows = 100;
     debug("page: $page, rows: $rows");
 
     my $urls = [$self->storage->mysql->resultset($self->site_id . 'ItemUrl')->search(

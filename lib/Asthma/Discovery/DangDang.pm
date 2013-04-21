@@ -111,8 +111,8 @@ sub find_urls {
                 if ( my $content = $mess->decoded_content(charset => 'gbk') ) {
                     my $tree = HTML::TreeBuilder->new_from_content($content);
 
-                    if ( my $plist = $tree->look_down('class', 'shoplist') ) {
-                        foreach my $li ( $plist->look_down(_tag => 'li', name => 'lb') ) {
+                    if ( my $plist = $tree->look_down('class', 'con shoplist') ) {
+                        foreach my $li ( $plist->look_down(_tag => 'li', class => qr/line\d+/) ) {
                             if ( my $ah = $li->look_down(_tag => 'a', class => 'pic') ) {
                                 if ( my $item_url = $ah->attr('href') ) {
                                     my $md5_link = md5_base64($item_url);
