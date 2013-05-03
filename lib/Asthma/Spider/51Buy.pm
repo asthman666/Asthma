@@ -69,7 +69,7 @@ sub parse_item_urls {
                         $item->sku($sku);
                     }
 
-                    if ( $content =~ m{var\s+itemInfo\s+=\s+\{.*?"name"\s*:\s*"(.+?)"} ) {
+                    if ( $content =~ m{<div class="property id_promotion".+?<h1>(.+?)<}s ) {
                         my $title = $1;
                         $item->title($title);
                     }
