@@ -23,7 +23,7 @@ sub _build_redis_db {
 
 sub _build_mysql {
     my $self = shift;
-    return Asthma::Schema->connect('dbi:mysql:asthma', 'foo', 'bar');
+    return Asthma::Schema->connect('dbi:mysql:asthma:mysql_enable_utf8=1', 'foo', 'bar');
 }
 
 __PACKAGE__->meta->make_immutable;
