@@ -110,6 +110,7 @@
    <field name="url"       type="string"       indexed="false" stored="true" />
 
    <field name="ean"       type="string"       indexed="true"  stored="true" />
+   <field name="ean_list"  type="string"       indexed="true"  stored="true" multiValued="false" />
 
    <field name="available" type="string"       indexed="true"  stored="true" default="in stock" />
 
