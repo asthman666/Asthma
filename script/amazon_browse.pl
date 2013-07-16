@@ -46,25 +46,29 @@ sub get_browse {
     };
 
     my $content = $aws->content($request);
-    my $ref = eval{ XMLin($content)->{BrowseNodes}->{BrowseNode} };
+    unless ( $content ) {
+	return;
+    }
 
+    my $ref = eval{ XMLin($content, ForceArray => ['BrowseNode'])->{BrowseNodes}->{BrowseNode} };
     sleep 1;
+    debug Dumper $ref;
 
     my @parent_browse_ids = split(/>/, $parent_browse_tree);
     my $level = @parent_browse_ids;
     my $parent_browse_id = $parent_browse_ids[-1];
 
     my $browse_tree = "$parent_browse_tree>$browse_id";
-    my $browse_tree_value = "$parent_browse_tree_value>$ref->{Name}";
+    my $browse_tree_value = "$parent_browse_tree_value>$ref->[0]->{Name}";
 
     my $is_leaf = 'n';
-    unless ( $ref->{Children} ) {
+    unless ( $ref->[0]->{Children} ) {
         $is_leaf = 'y';
     }
 
     $storage->mysql->resultset('SiteBrowse')->find_or_create({ site_id => $site_id,
                                                                browse_id => $browse_id,
-                                                               value => $ref->{Name},
+                                                               value => $ref->[0]->{Name},
                                                                parent_browse_id => $parent_browse_id,
                                                                browse_tree => $browse_tree,
                                                                browse_tree_value => $browse_tree_value,
@@ -73,9 +77,9 @@ sub get_browse {
                                                                dt_created => \$now,
                                                                dt_updated => \$now,
                                                              });
-    return unless $ref->{Children};
+    return unless $ref->[0]->{Children};
 
-    foreach my $h ( @{$ref->{Children}->{BrowseNode}} ) {
+    foreach my $h ( @{$ref->[0]->{Children}->{BrowseNode}} ) {
         if ( $parent_browse_id == 0 ) {
             if ( $h->{IsCategoryRoot} ) {
                 get_browse($h->{BrowseNodeId}, $browse_tree, $browse_tree_value);

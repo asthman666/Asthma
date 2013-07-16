@@ -8,7 +8,8 @@ use vars qw/$VERSION @ISA @EXPORT $DEBUG_FH/;
 @EXPORT = qw/&debug &debug_item/;
 
 $DEBUG_FH ||= *STDERR;
-$|++;
+
+select((select($DEBUG_FH), $| = 1)[0]);
 
 binmode($DEBUG_FH, ":encoding(utf8)");
 
